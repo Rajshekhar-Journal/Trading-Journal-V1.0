@@ -10,11 +10,11 @@ const dashboardModule = (() => {
   let _selectedRange = 'YTD';
 
   // ── Init ─────────────────────────────────────────────────────────────────
-  function init() {
+  async function init() {
     // Auto-run alert engine on every dashboard load
-    try { alertEngine.checkAllAlerts(db.getOpenTrades()); } catch(e) {}
+    try { alertEngine.checkAllAlerts(await db.getOpenTrades()); } catch(e) {}
 
-    const settings = db.getSettings();
+    const settings = await db.getSettings();
     _selectedRange = settings?.general?.defaultDateRange || 'YTD';
 
     const currentActive = document.querySelector('#dash-date-filter .filter-btn.active');
@@ -29,7 +29,7 @@ const dashboardModule = (() => {
     }
 
     _setupDateFilter();
-    _render();
+    await _render();
   }
 
   // ── Date Filter ───────────────────────────────────────────────────────────
@@ -39,23 +39,23 @@ const dashboardModule = (() => {
     container.querySelectorAll('.filter-btn').forEach(btn => {
       const fresh = btn.cloneNode(true);
       btn.parentNode.replaceChild(fresh, btn);
-      fresh.addEventListener('click', () => {
+      fresh.addEventListener('click', async () => {
         container.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
         fresh.classList.add('active');
         _selectedRange = fresh.dataset.range || 'YTD';
-        _render();
+        await _render();
       });
     });
   }
 
   // ── Master Render ─────────────────────────────────────────────────────────
-  function _render() {
-    const allTrades    = db.getTrades();
-    const openTrades   = db.getOpenTrades();
-    const closedTrades = db.getClosedTrades();
-    const capital      = db.getCapital();
-    const settings     = db.getSettings();
-    const marketHealth = db.getMarketHealth();
+  async function _render() {
+    const allTrades    = await db.getTrades();
+    const openTrades   = await db.getOpenTrades();
+    const closedTrades = await db.getClosedTrades();
+    const capital      = await db.getCapital();
+    const settings     = await db.getSettings();
+    const marketHealth = await db.getMarketHealth();
 
     const totalRealizedPnl = calc.getTotalPnl(closedTrades);
     const equity           = calc.getCurrentEquity(capital, totalRealizedPnl);

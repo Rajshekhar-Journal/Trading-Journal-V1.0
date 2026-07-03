@@ -11,40 +11,40 @@ const tradesModule = (() => {
   let _selectedId  = null;
   let _isFullscreen = false;
 
-  function init() {
+  async function init() {
     _setupFilters();
-    _render();
+    await _render();
   }
 
   function _setupFilters() {
     document.querySelectorAll('#trades-date-filter .filter-btn').forEach(btn => {
       const fresh = btn.cloneNode(true);
       btn.parentNode.replaceChild(fresh, btn);
-      fresh.addEventListener('click', () => {
+      fresh.addEventListener('click', async () => {
         document.querySelectorAll('#trades-date-filter .filter-btn').forEach(b => b.classList.remove('active'));
         fresh.classList.add('active');
         _range = fresh.dataset.range;
-        _render();
+        await _render();
       });
     });
     ['trades-search','trades-filter-result','trades-filter-setup'].forEach(id => {
       const el = document.getElementById(id);
-      if (el) { const fresh = el.cloneNode(true); el.parentNode.replaceChild(fresh, el); fresh.addEventListener('input', () => _renderTable(_getFilteredTrades())); }
+      if (el) { const fresh = el.cloneNode(true); el.parentNode.replaceChild(fresh, el); fresh.addEventListener('input', async () => _renderTable(await _getFilteredTrades())); }
     });
     // Column sort
     document.querySelectorAll('#trades-table th[data-sort]').forEach(th => {
       const fresh = th.cloneNode(true);
       th.parentNode.replaceChild(fresh, th);
-      fresh.addEventListener('click', () => {
+      fresh.addEventListener('click', async () => {
         if (_sortCol === fresh.dataset.sort) _sortDir *= -1;
         else { _sortCol = fresh.dataset.sort; _sortDir = -1; }
-        _renderTable(_getFilteredTrades());
+        _renderTable(await _getFilteredTrades());
       });
     });
   }
 
-  function _getFilteredTrades() {
-    let trades = calc.filterByDateRange(db.getClosedTrades(), _range);
+  async function _getFilteredTrades() {
+    let trades = calc.filterByDateRange(await db.getClosedTrades(), _range);
     const search = document.getElementById('trades-search')?.value?.toLowerCase() || '';
     const result = document.getElementById('trades-filter-result')?.value || '';
     const setup  = document.getElementById('trades-filter-setup')?.value || '';
@@ -54,18 +54,18 @@ const tradesModule = (() => {
     return trades;
   }
 
-  function _render() {
-    const allClosed = db.getClosedTrades();
+  async function _render() {
+    const allClosed = await db.getClosedTrades();
     const filtered  = calc.filterByDateRange(allClosed, _range);
-    _populateSetupFilter(allClosed);
+    await _populateSetupFilter(allClosed);
     _renderSummaryCards(filtered);
-    _renderTable(_getFilteredTrades());
+    _renderTable(await _getFilteredTrades());
   }
 
-  function _populateSetupFilter(trades) {
+  async function _populateSetupFilter(trades) {
     const sel = document.getElementById('trades-filter-setup');
     if (!sel) return;
-    const playbooks = db.getPlaybooks();
+    const playbooks = await db.getPlaybooks();
     const usedIds   = [...new Set(trades.map(t => t.playbookId).filter(Boolean))];
     sel.innerHTML = '<option value="">All Setups</option>' +
       usedIds.map(id => { const pb = playbooks.find(p => p.id === id); return pb ? `<option value="${id}">${pb.name}</option>` : ''; }).join('');
@@ -97,7 +97,7 @@ const tradesModule = (() => {
       </div>`).join('');
   }
 
-  function _renderTable(trades) {
+  async function _renderTable(trades) {
     const tbl = document.getElementById('trades-table');
     if (!tbl) return;
     // Update header dynamically with all SRS columns
@@ -122,10 +122,10 @@ const tradesModule = (() => {
       // Re-attach sort listeners after header update
       thead.querySelectorAll('th[data-sort]').forEach(th => {
         th.style.cursor = 'pointer';
-        th.addEventListener('click', () => {
+        th.addEventListener('click', async () => {
           if (_sortCol === th.dataset.sort) _sortDir *= -1;
           else { _sortCol = th.dataset.sort; _sortDir = -1; }
-          _renderTable(_getFilteredTrades());
+          _renderTable(await _getFilteredTrades());
         });
       });
     }
@@ -151,7 +151,7 @@ const tradesModule = (() => {
       tbody.innerHTML = `<tr><td colspan="15"><div class="no-data"><div class="no-data-icon">📭</div>No closed trades for this period.</div></td></tr>`;
       return;
     }
-    const playbooks = db.getPlaybooks();
+    const playbooks = await db.getPlaybooks();
     tbody.innerHTML = sorted.map(trade => {
       const m        = calc.getTradeMetrics(trade);
       const result   = calc.getTradeResult(trade);
@@ -181,14 +181,14 @@ const tradesModule = (() => {
     }).join('');
   }
 
-  function _onRowClick(id) {
+  async function _onRowClick(id) {
     _selectedId = id;
     document.querySelectorAll('#trades-table-body tr').forEach(r => r.classList.remove('selected'));
     document.querySelector(`#trades-table-body tr[data-id="${id}"]`)?.classList.add('selected');
-    _renderDetailPanel(id);
+    await _renderDetailPanel(id);
   }
 
-  function _renderDetailPanel(tradeId) {
+  async function _renderDetailPanel(tradeId) {
     const panel = document.getElementById('trades-detail-panel');
     if (!panel) return;
     panel.classList.remove('hidden');
@@ -200,11 +200,11 @@ const tradesModule = (() => {
       splitView.querySelector('.split-right')?.setAttribute('style', 'flex:1');
     }
 
-    const trade = db.getTradeById(tradeId);
+    const trade = await db.getTradeById(tradeId);
     if (!trade) return;
     const m       = calc.getTradeMetrics(trade);
     const result  = calc.getTradeResult(trade);
-    const pb      = db.getPlaybookById(trade.playbookId);
+    const pb      = await db.getPlaybookById(trade.playbookId);
     const resBadge= result==='Win'?'badge-success':result==='Loss'?'badge-danger':'badge-muted';
 
     panel.innerHTML = `
@@ -247,12 +247,12 @@ const tradesModule = (() => {
       </div>`;
 
     panel.querySelectorAll('.detail-tab-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         panel.querySelectorAll('.detail-tab-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        const t   = db.getTradeById(tradeId);
+        const t   = await db.getTradeById(tradeId);
         const tm  = calc.getTradeMetrics(t);
-        const tpb = db.getPlaybookById(t.playbookId);
+        const tpb = await db.getPlaybookById(t.playbookId);
         const tc  = document.getElementById('trades-dtab-content');
         if (!tc) return;
         const tab = btn.dataset.dtab;
@@ -284,20 +284,20 @@ const tradesModule = (() => {
     const ruleEl   = document.getElementById('ov-rule');
     const reviewEl = document.getElementById('ov-review');
     const starsEl  = document.getElementById('ov-stars');
-    const save = () => {
-      const t = db.getTradeById(tradeId);
+    const save = async () => {
+      const t = await db.getTradeById(tradeId);
       if (!t) return;
-      db.saveTrade({ ...t, ruleFollowed: ruleEl?.checked ?? t.ruleFollowed, reviewStatus: reviewEl?.value || t.reviewStatus });
+      await db.saveTrade({ ...t, ruleFollowed: ruleEl?.checked ?? t.ruleFollowed, reviewStatus: reviewEl?.value || t.reviewStatus });
       app.toast('Saved', 'success');
-      _renderTable(_getFilteredTrades());
+      _renderTable(await _getFilteredTrades());
     };
     ruleEl?.addEventListener('change', save);
     reviewEl?.addEventListener('change', save);
     starsEl?.querySelectorAll('.star').forEach(star => {
-      star.addEventListener('click', () => {
+      star.addEventListener('click', async () => {
         const rating = parseInt(star.dataset.star);
-        const t = db.getTradeById(tradeId);
-        db.saveTrade({ ...t, rating });
+        const t = await db.getTradeById(tradeId);
+        await db.saveTrade({ ...t, rating });
         starsEl.querySelectorAll('.star').forEach((s,i) => s.classList.toggle('active', i<rating));
       });
     });
@@ -334,9 +334,9 @@ const tradesModule = (() => {
     </table>`;
   }
 
-  function _deleteLifecycleRow(tradeId, type, recordId) {
+  async function _deleteLifecycleRow(tradeId, type, recordId) {
     if (!confirm(`Delete this ${type} record? Metrics will recalculate automatically.`)) return;
-    const trade = db.getTradeById(tradeId);
+    const trade = await db.getTradeById(tradeId);
     if (!trade) return;
     const updated = { ...trade };
     if (type === 'Entry') {
@@ -349,15 +349,15 @@ const tradesModule = (() => {
     } else if (type === 'Final Exit') {
       updated.finalExit = null;
     }
-    db.saveTrade(updated);
+    await db.saveTrade(updated);
     app.toast(`${type} deleted — metrics recalculated.`, 'success');
-    _render();
-    _renderDetailPanel(tradeId);
+    await _render();
+    await _renderDetailPanel(tradeId);
     document.querySelector('.detail-tab-btn[data-dtab="lifecycle"]')?.click();
   }
 
-  function _editLifecycleRow(tradeId, type, recordId) {
-    const trade = db.getTradeById(tradeId);
+  async function _editLifecycleRow(tradeId, type, recordId) {
+    const trade = await db.getTradeById(tradeId);
     if (!trade) return;
     let record;
     if (type==='Entry')          record = (trade.entries||[]).find(e => e.id===recordId);
@@ -374,7 +374,7 @@ const tradesModule = (() => {
     </div>`;
     app.openModal(`Edit ${type} — ${trade.symbol}`, content, [
       { id:'cancel', label:'Cancel', class:'btn-secondary', onClick: app.closeModal },
-      { id:'save', label:'Save & Recalculate', class:'btn-primary', onClick: () => {
+      { id:'save', label:'Save & Recalculate', class:'btn-primary', onClick: async () => {
         const date    = document.getElementById('el-date').value;
         const price   = parseFloat(document.getElementById('el-price').value);
         const qty     = parseInt(document.getElementById('el-qty').value);
@@ -386,11 +386,11 @@ const tradesModule = (() => {
         else if (type==='Pyramid')   updated.pyramids     = (trade.pyramids||[]).map(p => p.id===recordId ? updRec : p);
         else if (type==='Partial Exit') updated.partialExits = (trade.partialExits||[]).map(p => p.id===recordId ? updRec : p);
         else if (type==='Final Exit')   updated.finalExit = updRec;
-        db.saveTrade(updated);
+        await db.saveTrade(updated);
         app.closeModal();
         app.toast(`${type} updated — metrics recalculated.`,'success');
-        _render();
-        _renderDetailPanel(tradeId);
+        await _render();
+        await _renderDetailPanel(tradeId);
         document.querySelector('.detail-tab-btn[data-dtab="lifecycle"]')?.click();
       }}
     ]);
@@ -422,14 +422,14 @@ const tradesModule = (() => {
     </div>`;
   }
 
-  function _addNote(tradeId) {
+  async function _addNote(tradeId) {
     const date = document.getElementById('td-note-date').value;
     const text = document.getElementById('td-note-text').value.trim();
     if (!text) return app.toast('Enter a note','error');
-    const trade = db.getTradeById(tradeId);
-    db.saveTrade({ ...trade, notes: [...(trade.notes||[]), { id: db.generateId('nt'), date, text }] });
+    const trade = await db.getTradeById(tradeId);
+    await db.saveTrade({ ...trade, notes: [...(trade.notes||[]), { id: db.generateId('nt'), date, text }] });
     app.toast('Note saved','success');
-    _renderDetailPanel(tradeId);
+    await _renderDetailPanel(tradeId);
     document.querySelector('.detail-tab-btn[data-dtab="notes"]')?.click();
   }
 

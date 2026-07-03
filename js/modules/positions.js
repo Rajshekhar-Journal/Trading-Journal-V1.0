@@ -9,20 +9,20 @@ const positionsModule = (() => {
   let _selectedTradeId = null;
   let _isFullscreen = false;
 
-  function init() {
+  async function init() {
     // Auto-run alert engine on every load
-    try { alertEngine.checkAllAlerts(db.getOpenTrades()); } catch(e) {}
-    _renderOverviewCards();
-    _renderTable();
+    try { alertEngine.checkAllAlerts(await db.getOpenTrades()); } catch(e) {}
+    await _renderOverviewCards();
+    await _renderTable();
     _setupNewTradeBtn();
   }
 
   // ── Overview Cards ─────────────────────────────────────────────────────────
-  function _renderOverviewCards() {
-    const openTrades  = db.getOpenTrades();
-    const capital     = db.getCapital();
-    const settings    = db.getSettings();
-    const closedTrades= db.getClosedTrades();
+  async function _renderOverviewCards() {
+    const openTrades  = await db.getOpenTrades();
+    const capital     = await db.getCapital();
+    const settings    = await db.getSettings();
+    const closedTrades= await db.getClosedTrades();
     const realizedPnl = calc.getTotalPnl(closedTrades);
     const equity      = calc.getCurrentEquity(capital, realizedPnl);
     const currentR    = calc.getCurrentR(equity, settings);
@@ -54,7 +54,7 @@ const positionsModule = (() => {
   }
 
   // ── Positions Table ────────────────────────────────────────────────────────
-  function _renderTable() {
+  async function _renderTable() {
     const tbl = document.getElementById('pos-table');
     if (!tbl) return;
     // Update header dynamically to include all SRS-required columns
@@ -69,10 +69,10 @@ const positionsModule = (() => {
 
     const tbody = document.getElementById('pos-table-body');
     if (!tbody) return;
-    const openTrades = db.getOpenTrades();
-    const capital    = db.getCapital();
-    const settings   = db.getSettings();
-    const closedTrades = db.getClosedTrades();
+    const openTrades = await db.getOpenTrades();
+    const capital    = await db.getCapital();
+    const settings   = await db.getSettings();
+    const closedTrades = await db.getClosedTrades();
     const realizedPnl  = calc.getTotalPnl(closedTrades);
     const equity       = calc.getCurrentEquity(capital, realizedPnl);
     const currentR     = calc.getCurrentR(equity, settings);
@@ -113,15 +113,15 @@ const positionsModule = (() => {
     }).join('');
   }
 
-  function _onRowClick(id) {
+  async function _onRowClick(id) {
     _selectedTradeId = id;
     document.querySelectorAll('#pos-table-body tr').forEach(r => r.classList.remove('selected'));
     document.querySelector(`#pos-table-body tr[data-id="${id}"]`)?.classList.add('selected');
-    _renderDetailPanel(id);
+    await _renderDetailPanel(id);
   }
 
   // ── Detail Panel ───────────────────────────────────────────────────────────
-  function _renderDetailPanel(tradeId) {
+  async function _renderDetailPanel(tradeId) {
     const panel = document.getElementById('pos-detail-panel');
     if (!panel) return;
     panel.classList.remove('hidden');
@@ -133,7 +133,7 @@ const positionsModule = (() => {
       splitView.querySelector('.split-right')?.setAttribute('style', 'flex:1');
     }
 
-    const trade = db.getTradeById(tradeId);
+    const trade = await db.getTradeById(tradeId);
     if (!trade) return;
     const m         = calc.getTradeMetrics(trade);
     const cmp       = trade.cmp || m.avgEntryPrice;
@@ -142,7 +142,7 @@ const positionsModule = (() => {
     const alerts    = (trade.alerts || []).filter(a => a.status === 'Triggered');
     const dirBadge  = `<span class="badge ${trade.direction === 'Long' ? 'badge-success' : 'badge-danger'}">${trade.direction}</span>`;
     const alertHtml = alerts.map(a => `<div class="alert-banner warning">⚠ ${a.type}</div>`).join('');
-    const playbook  = db.getPlaybookById(trade.playbookId);
+    const playbook  = await db.getPlaybookById(trade.playbookId);
 
     panel.innerHTML = `
       <div class="detail-panel">
@@ -202,10 +202,10 @@ const positionsModule = (() => {
       </div>`;
 
     panel.querySelectorAll('.detail-tab-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         panel.querySelectorAll('.detail-tab-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        const t  = db.getTradeById(tradeId);
+        const t  = await db.getTradeById(tradeId);
         const tc = document.getElementById('pos-dtab-content');
         if (!tc) return;
         if (btn.dataset.dtab === 'lifecycle') tc.innerHTML = _renderLifecycleTab(t);
@@ -259,9 +259,9 @@ const positionsModule = (() => {
   }
 
   // ── Delete Lifecycle Record ────────────────────────────────────────────────
-  function _deleteLifecycleRow(tradeId, type, recordId) {
+  async function _deleteLifecycleRow(tradeId, type, recordId) {
     if (!confirm(`Delete this ${type} record? This will recalculate all metrics.`)) return;
-    const trade = db.getTradeById(tradeId);
+    const trade = await db.getTradeById(tradeId);
     if (!trade) return;
     const updated = { ...trade };
     if (type === 'Entry') {
@@ -274,15 +274,15 @@ const positionsModule = (() => {
     } else if (type === 'Final Exit') {
       updated.finalExit = null;
     }
-    db.saveTrade(updated);
+    await db.saveTrade(updated);
     app.toast(`${type} record deleted and metrics recalculated.`, 'success');
-    init();
-    _renderDetailPanel(tradeId);
+    await init();
+    await _renderDetailPanel(tradeId);
   }
 
   // ── Edit Lifecycle Record ──────────────────────────────────────────────────
-  function _editLifecycleRow(tradeId, type, recordId) {
-    const trade = db.getTradeById(tradeId);
+  async function _editLifecycleRow(tradeId, type, recordId) {
+    const trade = await db.getTradeById(tradeId);
     if (!trade) return;
     let record;
     if (type === 'Entry')        record = (trade.entries||[]).find(e => e.id === recordId);
@@ -299,7 +299,7 @@ const positionsModule = (() => {
     </div>`;
     app.openModal(`Edit ${type} — ${trade.symbol}`, content, [
       { id:'cancel', label:'Cancel', class:'btn-secondary', onClick: app.closeModal },
-      { id:'save',   label:'Save & Recalculate', class:'btn-primary', onClick: () => {
+      { id:'save',   label:'Save & Recalculate', class:'btn-primary', onClick: async () => {
         const date    = document.getElementById('el-date').value;
         const price   = parseFloat(document.getElementById('el-price').value);
         const qty     = parseInt(document.getElementById('el-qty').value);
@@ -311,18 +311,18 @@ const positionsModule = (() => {
         else if (type === 'Pyramid')  updated.pyramids     = (trade.pyramids||[]).map(p => p.id===recordId ? updRec : p);
         else if (type === 'Partial Exit') updated.partialExits = (trade.partialExits||[]).map(p => p.id===recordId ? updRec : p);
         else if (type === 'Final Exit')   updated.finalExit = updRec;
-        db.saveTrade(updated);
+        await db.saveTrade(updated);
         app.closeModal();
         app.toast(`${type} updated — metrics recalculated.`, 'success');
-        init();
-        _renderDetailPanel(tradeId);
+        await init();
+        await _renderDetailPanel(tradeId);
       }}
     ]);
   }
 
   // ── CMP Update Modal (manual + Yahoo Finance) ─────────────────────────────
-  function _showCmpModal(tradeId) {
-    const trade = db.getTradeById(tradeId);
+  async function _showCmpModal(tradeId) {
+    const trade = await db.getTradeById(tradeId);
     if (!trade) return;
     const curCmp = trade.cmp || calc.getTradeMetrics(trade).avgEntryPrice;
     const content = `<div>
@@ -341,14 +341,14 @@ const positionsModule = (() => {
     </div>`;
     app.openModal(`Update CMP — ${trade.symbol}`, content, [
       { id:'cancel', label:'Cancel', class:'btn-secondary', onClick: app.closeModal },
-      { id:'save', label:'Update CMP', class:'btn-primary', onClick: () => {
+      { id:'save', label:'Update CMP', class:'btn-primary', onClick: async () => {
         const newCmp = parseFloat(document.getElementById('cmp-value').value);
         if (!newCmp || newCmp <= 0) { app.toast('Enter a valid price', 'error'); return; }
-        db.saveTrade({ ...trade, cmp: newCmp });
+        await db.saveTrade({ ...trade, cmp: newCmp });
         app.closeModal();
         app.toast(`CMP updated: ₹${calc.formatNumber(newCmp)}`, 'success');
-        init();
-        if (_selectedTradeId === tradeId) _renderDetailPanel(tradeId);
+        await init();
+        if (_selectedTradeId === tradeId) await _renderDetailPanel(tradeId);
       }}
     ]);
 
@@ -465,8 +465,8 @@ const positionsModule = (() => {
   }
 
   // ── Quick Action Modals ────────────────────────────────────────────────────
-  function _showExitModal(tradeId, type) {
-    const trade = db.getTradeById(tradeId);
+  async function _showExitModal(tradeId, type) {
+    const trade = await db.getTradeById(tradeId);
     if (!trade) return;
     const m       = calc.getTradeMetrics(trade);
     const today   = new Date().toISOString().split('T')[0];
@@ -484,7 +484,7 @@ const positionsModule = (() => {
     </div>`;
     app.openModal(`${isPartial ? 'Partial' : 'Final'} Exit — ${trade.symbol}`, content, [
       { id:'cancel', label:'Cancel', class:'btn-secondary', onClick: app.closeModal },
-      { id:'save', label:'Confirm Exit', class:'btn-danger', onClick: () => {
+      { id:'save', label:'Confirm Exit', class:'btn-danger', onClick: async () => {
         const date    = document.getElementById('exit-date').value;
         const price   = parseFloat(document.getElementById('exit-price').value);
         const qty     = parseInt(document.getElementById('exit-qty').value);
@@ -509,28 +509,28 @@ const positionsModule = (() => {
           return a;
         });
 
-        db.saveTrade(updated);
+        await db.saveTrade(updated);
         app.closeModal();
         app.toast(`Exit recorded for ${trade.symbol}. Alerts marked Completed.`, 'success');
-        init();
-        const stillOpen = db.getTradeById(tradeId);
-        if (stillOpen) _renderDetailPanel(tradeId);
+        await init();
+        const stillOpen = await db.getTradeById(tradeId);
+        if (stillOpen) await _renderDetailPanel(tradeId);
       }}
     ]);
   }
 
-  function _showPyramidModal(tradeId) {
-    const trade = db.getTradeById(tradeId);
+  async function _showPyramidModal(tradeId) {
+    const trade = await db.getTradeById(tradeId);
     if (!trade) return;
     const today    = new Date().toISOString().split('T')[0];
-    const settings = db.getSettings();
-    const capital  = db.getCapital();
-    const closedT  = db.getClosedTrades();
+    const settings = await db.getSettings();
+    const capital  = await db.getCapital();
+    const closedT  = await db.getClosedTrades();
     const realPnl  = calc.getTotalPnl(closedT);
     const equity   = calc.getCurrentEquity(capital, realPnl);
     const currentR = calc.getCurrentR(equity, settings);
     const maxHeat  = settings?.riskManagement?.maxPortfolioHeat || 4;
-    const openTrades = db.getOpenTrades();
+    const openTrades = await db.getOpenTrades();
     const currentHeat = calc.getPortfolioHeat(openTrades, currentR);
 
     const content = `<div class="form-grid">
@@ -543,7 +543,7 @@ const positionsModule = (() => {
     </div>`;
     app.openModal(`Pyramid — ${trade.symbol}`, content, [
       { id:'cancel', label:'Cancel', class:'btn-secondary', onClick: app.closeModal },
-      { id:'save', label:'Add Pyramid', class:'btn-success', onClick: () => {
+      { id:'save', label:'Add Pyramid', class:'btn-success', onClick: async () => {
         const date    = document.getElementById('pyr-date').value;
         const price   = parseFloat(document.getElementById('pyr-price').value);
         const qty     = parseInt(document.getElementById('pyr-qty').value);
@@ -566,16 +566,16 @@ const positionsModule = (() => {
         }
 
         const updated = { ...trade, pyramids: [...(trade.pyramids||[]), { id: db.generateId('py'), date, price, qty, charges, actionSource: 'Pyramid', notes }] };
-        db.saveTrade(updated);
+        await db.saveTrade(updated);
         app.closeModal();
         app.toast(`Pyramid added to ${trade.symbol}`, 'success');
-        init(); _renderDetailPanel(tradeId);
+        await init(); await _renderDetailPanel(tradeId);
       }}
     ]);
   }
 
-  function _showStopModal(tradeId) {
-    const trade = db.getTradeById(tradeId);
+  async function _showStopModal(tradeId) {
+    const trade = await db.getTradeById(tradeId);
     if (!trade) return;
     const today = new Date().toISOString().split('T')[0];
     const content = `<div class="form-grid">
@@ -587,7 +587,7 @@ const positionsModule = (() => {
     </div>`;
     app.openModal(`Revise Stop — ${trade.symbol}`, content, [
       { id:'cancel', label:'Cancel', class:'btn-secondary', onClick: app.closeModal },
-      { id:'save', label:'Save Stop', class:'btn-primary', onClick: () => {
+      { id:'save', label:'Save Stop', class:'btn-primary', onClick: async () => {
         const date    = document.getElementById('stop-date').value;
         const oldStop = parseFloat(document.getElementById('stop-old').value);
         const newStop = parseFloat(document.getElementById('stop-new').value);
@@ -595,31 +595,31 @@ const positionsModule = (() => {
         const notes   = document.getElementById('stop-notes').value;
         if (!date || !newStop) { app.toast('Please fill all fields', 'error'); return; }
         const updated = { ...trade, currentStop: newStop, stopRevisions: [...(trade.stopRevisions||[]), { id: db.generateId('sr'), date, oldStop, newStop, actionSource: source, notes }] };
-        db.saveTrade(updated);
+        await db.saveTrade(updated);
         app.closeModal();
         app.toast(`Stop revised for ${trade.symbol}`, 'success');
-        init(); _renderDetailPanel(tradeId);
+        await init(); await _renderDetailPanel(tradeId);
       }}
     ]);
   }
 
-  function _showNoteModal(tradeId) {
-    const trade = db.getTradeById(tradeId);
+  async function _showNoteModal(tradeId) {
+    const trade = await db.getTradeById(tradeId);
     if (!trade) return;
     const today = new Date().toISOString().split('T')[0];
     const content = `<div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="note-date" value="${today}"></div>
       <div class="form-group"><label class="form-label">Note</label><textarea class="form-input form-textarea" id="note-text" placeholder="Enter your observation..." rows="4"></textarea></div>`;
     app.openModal(`Add Note — ${trade.symbol}`, content, [
       { id:'cancel', label:'Cancel', class:'btn-secondary', onClick: app.closeModal },
-      { id:'save', label:'Save Note', class:'btn-primary', onClick: () => {
+      { id:'save', label:'Save Note', class:'btn-primary', onClick: async () => {
         const date = document.getElementById('note-date').value;
         const text = document.getElementById('note-text').value.trim();
         if (!text) { app.toast('Please enter a note', 'error'); return; }
         const updated = { ...trade, notes: [...(trade.notes||[]), { id: db.generateId('nt'), date, text }] };
-        db.saveTrade(updated);
+        await db.saveTrade(updated);
         app.closeModal();
         app.toast('Note saved', 'success');
-        _renderDetailPanel(tradeId);
+        await _renderDetailPanel(tradeId);
       }}
     ]);
   }
@@ -630,15 +630,15 @@ const positionsModule = (() => {
     if (!btn) return;
     const fresh = btn.cloneNode(true);
     btn.parentNode.replaceChild(fresh, btn);
-    fresh.addEventListener('click', _showNewTradeModal);
+    fresh.addEventListener('click', async () => { await _showNewTradeModal(); });
   }
 
-  function _showNewTradeModal() {
-    const playbooks = db.getPlaybooks().filter(p => p.status === 'Active');
+  async function _showNewTradeModal() {
+    const playbooks = (await db.getPlaybooks()).filter(p => p.status === 'Active');
     const today     = new Date().toISOString().split('T')[0];
-    const settings  = db.getSettings();
-    const capital   = db.getCapital();
-    const closedT   = db.getClosedTrades();
+    const settings  = await db.getSettings();
+    const capital   = await db.getCapital();
+    const closedT   = await db.getClosedTrades();
     const realPnl   = calc.getTotalPnl(closedT);
     const equity    = calc.getCurrentEquity(capital, realPnl);
     const defRPT    = calc.getCurrentR(equity, settings);
@@ -672,7 +672,7 @@ const positionsModule = (() => {
     </div>`;
     app.openModal('New Trade', content, [
       { id:'cancel', label:'Cancel', class:'btn-secondary', onClick: app.closeModal },
-      { id:'save',   label:'Add Trade', class:'btn-primary', onClick: () => {
+      { id:'save',   label:'Add Trade', class:'btn-primary', onClick: async () => {
         const symbol    = document.getElementById('nt-symbol').value.trim().toUpperCase();
         const sector    = document.getElementById('nt-sector').value;
         const tradeType = document.getElementById('nt-type').value;
@@ -686,9 +686,10 @@ const positionsModule = (() => {
         const charges   = parseFloat(document.getElementById('nt-charges').value) || 0;
         const cmp       = parseFloat(document.getElementById('nt-cmp').value) || price;
         if (!symbol || !date || !price || !qty || !stop) { app.toast('Please fill all required (*) fields', 'error'); return; }
+        const pb = playbookId ? await db.getPlaybookById(playbookId) : null;
         const trade = {
           id: db.generateId('tr'), symbol, sector, tradeType, direction,
-          playbookId, playbookVersion: playbookId ? db.getPlaybookById(playbookId)?.currentVersion || '1.0' : '',
+          playbookId, playbookVersion: playbookId ? pb?.currentVersion || '1.0' : '',
           initialStop: stop, currentStop: stop, rpt,
           entries: [{ id: db.generateId('en'), date, price, qty, charges, notes:'' }],
           pyramids: [], stopRevisions: [{ id: db.generateId('sr'), date, oldStop: 0, newStop: stop, actionSource:'Manual', notes:'Initial stop' }],
@@ -697,10 +698,10 @@ const positionsModule = (() => {
           chartLink: `https://www.tradingview.com/chart/?symbol=NSE:${symbol}`, tags: [sector],
           cmp, createdAt: date, closedAt: null
         };
-        db.saveTrade(trade);
+        await db.saveTrade(trade);
         app.closeModal();
         app.toast(`Trade added: ${symbol}`, 'success');
-        init();
+        await init();
       }}
     ]);
   }

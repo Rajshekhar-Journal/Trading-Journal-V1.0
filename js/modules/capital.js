@@ -5,24 +5,24 @@
 const capitalModule = (() => {
   let _equityChart = null;
 
-  function init() {
-    _renderSummaryCards();
-    _renderEquityCurve();
-    _renderRiskInfo();   // Read-only info panel (editing moved to Settings)
-    _renderLedger();
+  async function init() {
+    await _renderSummaryCards();
+    await _renderEquityCurve();
+    await _renderRiskInfo();   // Read-only info panel (editing moved to Settings)
+    await _renderLedger();
     _setupAddBtn();
   }
 
   // ── Summary Cards ──────────────────────────────────────────────────────────
-  function _renderSummaryCards() {
+  async function _renderSummaryCards() {
     const el = document.getElementById('cap-summary-cards');
     if (!el) return;
-    const capital      = db.getCapital();
-    const closedTrades = db.getClosedTrades();
-    const openTrades   = db.getOpenTrades();
+    const capital      = await db.getCapital();
+    const closedTrades = await db.getClosedTrades();
+    const openTrades   = await db.getOpenTrades();
     const realizedPnl  = calc.getTotalPnl(closedTrades);
     const equity       = calc.getCurrentEquity(capital, realizedPnl);
-    const settings     = db.getSettings();
+    const settings     = await db.getSettings();
     const netDeposits  = calc.getNetDeposits(capital);
     const currentR     = calc.getCurrentR(equity, settings);
     const exposure     = openTrades.reduce((s,t) => s + calc.getTradeMetrics(t).exposure, 0);
@@ -65,10 +65,10 @@ const capitalModule = (() => {
   }
 
   // ── Equity Curve ───────────────────────────────────────────────────────────
-  function _renderEquityCurve() {
+  async function _renderEquityCurve() {
     if (_equityChart) { try { _equityChart.destroy(); } catch(e) {} _equityChart = null; }
-    const capital      = db.getCapital();
-    const closedTrades = db.getClosedTrades();
+    const capital      = await db.getCapital();
+    const closedTrades = await db.getClosedTrades();
     const netDeposits  = calc.getNetDeposits(capital);
     const dailyArr     = calc.getDailyPnl(closedTrades);
     const labels = ['Start', ...dailyArr.map(d => d.date.slice(5))];
@@ -83,12 +83,12 @@ const capitalModule = (() => {
   }
 
   // ── Risk Info Panel (read-only — editing is in Settings > Risk Management) ─
-  function _renderRiskInfo() {
+  async function _renderRiskInfo() {
     const el = document.getElementById('cap-risk-config');
     if (!el) return;
-    const settings = db.getSettings();
-    const capital  = db.getCapital();
-    const closedT  = db.getClosedTrades();
+    const settings = await db.getSettings();
+    const capital  = await db.getCapital();
+    const closedT  = await db.getClosedTrades();
     const realPnl  = calc.getTotalPnl(closedT);
     const equity   = calc.getCurrentEquity(capital, realPnl);
     const rm       = settings?.riskManagement || {};
@@ -124,10 +124,10 @@ const capitalModule = (() => {
   }
 
   // ── Ledger ─────────────────────────────────────────────────────────────────
-  function _renderLedger() {
+  async function _renderLedger() {
     const tbody = document.getElementById('cap-ledger-body');
     if (!tbody) return;
-    const capital = db.getCapital().slice().sort((a,b) => a.date.localeCompare(b.date));
+    const capital = (await db.getCapital()).slice().sort((a,b) => a.date.localeCompare(b.date));
     if (!capital.length) {
       tbody.innerHTML = `<tr><td colspan="7"><div class="no-data">No capital transactions yet.</div></td></tr>`;
       return;
@@ -151,11 +151,11 @@ const capitalModule = (() => {
     }).join('');
   }
 
-  function _deleteTxn(id) {
+  async function _deleteTxn(id) {
     if (!confirm('Delete this transaction?')) return;
-    db.deleteCapitalTransaction(id);
+    await db.deleteCapitalTransaction(id);
     app.toast('Transaction deleted','success');
-    init();
+    await init();
   }
 
   // ── Add Transaction ────────────────────────────────────────────────────────
@@ -177,17 +177,17 @@ const capitalModule = (() => {
       </div>`;
       app.openModal('Add Capital Transaction', content, [
         { id:'cancel', label:'Cancel', class:'btn-secondary', onClick: app.closeModal },
-        { id:'save', label:'Add Transaction', class:'btn-primary', onClick: () => {
+        { id:'save', label:'Add Transaction', class:'btn-primary', onClick: async () => {
           const type    = document.getElementById('cap-type').value;
           const date    = document.getElementById('cap-date').value;
           const amount  = parseFloat(document.getElementById('cap-amount').value);
           const account = document.getElementById('cap-account').value || 'Zerodha';
           const remarks = document.getElementById('cap-remarks').value;
           if (!date||!amount||amount<=0) { app.toast('Please fill Date and Amount','error'); return; }
-          db.saveCapitalTransaction({ id:db.generateId('cap'), type, date, amount, account, remarks });
+          await db.saveCapitalTransaction({ id:db.generateId('cap'), type, date, amount, account, remarks });
           app.closeModal();
           app.toast(`${type} of ${calc.formatCurrency(amount)} added`,'success');
-          init();
+          await init();
         }}
       ]);
     });

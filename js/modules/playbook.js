@@ -5,30 +5,31 @@
 const playbookModule = (() => {
   let _selectedPbId = null;
 
-  function init() {
-    _renderSummaryCards();
-    _renderTable();
+  async function init() {
+    await _renderSummaryCards();
+    await _renderTable();
     _setupSearch();
     _setupNewBtn();
   }
 
-  function _getPlaybookTrades(pbId) {
-    return db.getClosedTrades().filter(t => t.playbookId === pbId);
+  async function _getPlaybookTrades(pbId) {
+    const closed = await db.getClosedTrades();
+    return closed.filter(t => t.playbookId === pbId);
   }
 
-  function _renderSummaryCards() {
-    const pbs = db.getPlaybooks();
+  async function _renderSummaryCards() {
+    const pbs = await db.getPlaybooks();
     const active = pbs.filter(p => p.status === 'Active').length;
     const archived = pbs.filter(p => p.status === 'Archived').length;
     const drafts = pbs.filter(p => p.status === 'Draft').length;
-    const closed = db.getClosedTrades();
+    const closed = await db.getClosedTrades();
     const linked = closed.filter(t => t.playbookId).length;
     let bestName = '—', bestExp = -Infinity;
-    pbs.filter(p => p.status === 'Active').forEach(pb => {
-      const trades = _getPlaybookTrades(pb.id);
+    for (const pb of pbs.filter(p => p.status === 'Active')) {
+      const trades = await _getPlaybookTrades(pb.id);
       const exp = calc.getExpectancy(trades);
       if (exp > bestExp) { bestExp = exp; bestName = pb.name; }
-    });
+    }
     const el = document.getElementById('pb-summary-cards');
     if (!el) return;
     el.innerHTML = [
@@ -45,19 +46,19 @@ const playbookModule = (() => {
     </div>`).join('');
   }
 
-  function _renderTable(filter = '') {
+  async function _renderTable(filter = '') {
     const tbody = document.getElementById('pb-table-body');
     if (!tbody) return;
     const statusFilter = document.getElementById('pb-filter-status')?.value || '';
-    let pbs = db.getPlaybooks();
+    let pbs = await db.getPlaybooks();
     if (filter) pbs = pbs.filter(p => p.name.toLowerCase().includes(filter.toLowerCase()));
     if (statusFilter) pbs = pbs.filter(p => p.status === statusFilter);
     if (!pbs.length) {
       tbody.innerHTML = `<tr><td colspan="8"><div class="no-data"><div class="no-data-icon">📚</div>No playbooks found.</div></td></tr>`;
       return;
     }
-    tbody.innerHTML = pbs.map(pb => {
-      const trades = _getPlaybookTrades(pb.id);
+    const rows = await Promise.all(pbs.map(async pb => {
+      const trades = await _getPlaybookTrades(pb.id);
       const wr = calc.getWinRate(trades);
       const { avgWinR } = calc.getAvgWinLoss(trades);
       const exp = calc.getExpectancy(trades);
@@ -72,21 +73,22 @@ const playbookModule = (() => {
         <td>${trades.length > 0 ? avgWinR.toFixed(2) + 'R' : '—'}</td>
         <td class="${exp >= 0 ? 'text-success' : 'text-danger'}">${trades.length > 0 ? calc.formatR(exp) : '—'}</td>
       </tr>`;
-    }).join('');
+    }));
+    tbody.innerHTML = rows.join('');
   }
 
-  function _onRowClick(id) {
+  async function _onRowClick(id) {
     _selectedPbId = id;
     document.querySelectorAll('#pb-table-body tr').forEach(r => r.classList.remove('selected'));
     document.querySelector(`#pb-table-body tr[data-id="${id}"]`)?.classList.add('selected');
-    _renderDetailPanel(id);
+    await _renderDetailPanel(id);
   }
 
-  function _renderDetailPanel(pbId) {
+  async function _renderDetailPanel(pbId) {
     const panel = document.getElementById('pb-detail-panel');
     if (!panel) return;
     panel.classList.remove('hidden');
-    const pb = db.getPlaybookById(pbId);
+    const pb = await db.getPlaybookById(pbId);
     if (!pb) return;
     const ver = pb.versions?.find(v => v.version === pb.currentVersion) || pb.versions?.[0] || {};
     const stBadge = pb.status === 'Active' ? 'badge-success' : pb.status === 'Draft' ? 'badge-info' : 'badge-muted';
@@ -124,11 +126,11 @@ const playbookModule = (() => {
       </div>`;
 
     panel.querySelectorAll('.detail-tab-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         panel.querySelectorAll('.detail-tab-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         const tc = document.getElementById('pb-dtab-content');
-        const p = db.getPlaybookById(pbId);
+        const p = await db.getPlaybookById(pbId);
         const v = p.versions?.find(vx => vx.version === p.currentVersion) || p.versions?.[0] || {};
         if (!tc) return;
         const tab = btn.dataset.dtab;
@@ -137,8 +139,8 @@ const playbookModule = (() => {
         else if (tab === 'exit') tc.innerHTML = _tabExitRules(p, v, pbId);
         else if (tab === 'risk') tc.innerHTML = _tabRiskRules(p, v, pbId);
         else if (tab === 'checklist') tc.innerHTML = _tabChecklist(p, v, pbId);
-        else if (tab === 'trades') tc.innerHTML = _tabLinkedTrades(p);
-        else if (tab === 'analytics') tc.innerHTML = _tabAnalytics(p);
+        else if (tab === 'trades') tc.innerHTML = await _tabLinkedTrades(p);
+        else if (tab === 'analytics') tc.innerHTML = await _tabAnalytics(p);
         else if (tab === 'history') tc.innerHTML = _tabVersionHistory(p);
       });
     });
@@ -160,8 +162,8 @@ const playbookModule = (() => {
     </div>`;
   }
 
-  function _saveInfo(pbId) {
-    const pb = db.getPlaybookById(pbId);
+  async function _saveInfo(pbId) {
+    const pb = await db.getPlaybookById(pbId);
     if (!pb) return;
     const verIdx = pb.versions.findIndex(v => v.version === pb.currentVersion);
     if (verIdx < 0) return;
@@ -171,7 +173,7 @@ const playbookModule = (() => {
     pb.versions[verIdx].suitableTrend = document.getElementById('pb-trend')?.value || '';
     pb.versions[verIdx].riskCategory = document.getElementById('pb-riskcat')?.value || '';
     pb.versions[verIdx].idealHoldingPeriod = document.getElementById('pb-holding')?.value || '';
-    db.savePlaybook(pb);
+    await db.savePlaybook(pb);
     app.toast('Playbook saved', 'success');
   }
 
@@ -183,25 +185,25 @@ const playbookModule = (() => {
     </div>`;
   }
 
-  function _addEntryRule(pbId) {
+  async function _addEntryRule(pbId) {
     const input = document.getElementById('pb-new-entry-rule');
     const rule = input?.value.trim();
     if (!rule) return;
-    const pb = db.getPlaybookById(pbId);
+    const pb = await db.getPlaybookById(pbId);
     const vi = pb.versions.findIndex(v => v.version === pb.currentVersion);
     if (vi < 0) return;
     pb.versions[vi].entryRules = [...(pb.versions[vi].entryRules || []), rule];
-    db.savePlaybook(pb);
+    await db.savePlaybook(pb);
     app.toast('Rule added', 'success');
     document.querySelector('.detail-tab-btn[data-dtab="entry"]')?.click();
   }
 
-  function _deleteEntryRule(pbId, idx) {
-    const pb = db.getPlaybookById(pbId);
+  async function _deleteEntryRule(pbId, idx) {
+    const pb = await db.getPlaybookById(pbId);
     const vi = pb.versions.findIndex(v => v.version === pb.currentVersion);
     if (vi < 0) return;
     pb.versions[vi].entryRules.splice(idx, 1);
-    db.savePlaybook(pb);
+    await db.savePlaybook(pb);
     document.querySelector('.detail-tab-btn[data-dtab="entry"]')?.click();
   }
 
@@ -223,12 +225,12 @@ const playbookModule = (() => {
     </div>`;
   }
 
-  function _saveExitRules(pbId) {
-    const pb = db.getPlaybookById(pbId);
+  async function _saveExitRules(pbId) {
+    const pb = await db.getPlaybookById(pbId);
     const vi = pb.versions.findIndex(v => v.version === pb.currentVersion);
     if (vi < 0) return;
     pb.versions[vi].exitRules = { ...pb.versions[vi].exitRules, day5Rule: document.getElementById('er-day5')?.checked, atrExtension: document.getElementById('er-atr')?.checked, ema20Exit: document.getElementById('er-ema')?.checked };
-    db.savePlaybook(pb);
+    await db.savePlaybook(pb);
   }
 
   function _tabRiskRules(pb, ver, pbId) {
@@ -241,12 +243,12 @@ const playbookModule = (() => {
     <div class="settings-save-bar"><button class="btn btn-secondary btn-sm" onclick="playbookModule._saveRiskRules('${pbId}')">Save</button></div>`;
   }
 
-  function _saveRiskRules(pbId) {
-    const pb = db.getPlaybookById(pbId);
+  async function _saveRiskRules(pbId) {
+    const pb = await db.getPlaybookById(pbId);
     const vi = pb.versions.findIndex(v => v.version === pb.currentVersion);
     if (vi < 0) return;
     pb.versions[vi].riskRules = { maxInitialRisk: parseFloat(document.getElementById('rr-maxrisk')?.value) || 1, maxPyramid: parseInt(document.getElementById('rr-maxpyr')?.value) || 1, portfolioHeatGuideline: parseFloat(document.getElementById('rr-heat')?.value) || 4 };
-    db.savePlaybook(pb);
+    await db.savePlaybook(pb);
     app.toast('Risk rules saved', 'success');
   }
 
@@ -259,29 +261,29 @@ const playbookModule = (() => {
     </div>`;
   }
 
-  function _addChecklist(pbId) {
+  async function _addChecklist(pbId) {
     const input = document.getElementById('pb-new-checklist');
     const item = input?.value.trim();
     if (!item) return;
-    const pb = db.getPlaybookById(pbId);
+    const pb = await db.getPlaybookById(pbId);
     const vi = pb.versions.findIndex(v => v.version === pb.currentVersion);
     if (vi < 0) return;
     pb.versions[vi].checklist = [...(pb.versions[vi].checklist || []), item];
-    db.savePlaybook(pb);
+    await db.savePlaybook(pb);
     document.querySelector('.detail-tab-btn[data-dtab="checklist"]')?.click();
   }
 
-  function _deleteChecklist(pbId, idx) {
-    const pb = db.getPlaybookById(pbId);
+  async function _deleteChecklist(pbId, idx) {
+    const pb = await db.getPlaybookById(pbId);
     const vi = pb.versions.findIndex(v => v.version === pb.currentVersion);
     if (vi < 0) return;
     pb.versions[vi].checklist.splice(idx, 1);
-    db.savePlaybook(pb);
+    await db.savePlaybook(pb);
     document.querySelector('.detail-tab-btn[data-dtab="checklist"]')?.click();
   }
 
-  function _tabLinkedTrades(pb) {
-    const trades = _getPlaybookTrades(pb.id);
+  async function _tabLinkedTrades(pb) {
+    const trades = await _getPlaybookTrades(pb.id);
     if (!trades.length) return `<div class="no-data">No closed trades linked to this playbook.</div>`;
     return `<table class="data-table"><thead><tr><th>Symbol</th><th>Entry</th><th>Exit</th><th>P&L</th><th>R</th><th>Result</th></tr></thead>
       <tbody>${trades.map(t => { const m = calc.getTradeMetrics(t); const r = calc.getTradeResult(t); return `<tr>
@@ -294,8 +296,8 @@ const playbookModule = (() => {
       </tr>`; }).join('')}</tbody></table>`;
   }
 
-  function _tabAnalytics(pb) {
-    const trades = _getPlaybookTrades(pb.id);
+  async function _tabAnalytics(pb) {
+    const trades = await _getPlaybookTrades(pb.id);
     if (!trades.length) return `<div class="no-data">No trades to analyze.</div>`;
     const wr = calc.getWinRate(trades);
     const { avgWinR, avgLossR } = calc.getAvgWinLoss(trades);
@@ -324,40 +326,41 @@ const playbookModule = (() => {
     </div>`).join('')}</div>`;
   }
 
-  function _archivePlaybook(pbId) {
+  async function _archivePlaybook(pbId) {
     if (!confirm('Archive this playbook?')) return;
-    const pb = db.getPlaybookById(pbId);
-    db.savePlaybook({ ...pb, status: 'Archived' });
+    const pb = await db.getPlaybookById(pbId);
+    await db.savePlaybook({ ...pb, status: 'Archived' });
     app.toast('Playbook archived', 'success');
-    init();
-    _renderDetailPanel(pbId);
+    await init();
+    await _renderDetailPanel(pbId);
   }
 
-  function _publishPlaybook(pbId) {
-    const pb = db.getPlaybookById(pbId);
-    db.savePlaybook({ ...pb, status: 'Active' });
+  async function _publishPlaybook(pbId) {
+    const pb = await db.getPlaybookById(pbId);
+    await db.savePlaybook({ ...pb, status: 'Active' });
     app.toast('Playbook published!', 'success');
-    init();
-    _renderDetailPanel(pbId);
+    await init();
+    await _renderDetailPanel(pbId);
   }
 
-  function _newVersion(pbId) {
-    const pb = db.getPlaybookById(pbId);
+  async function _newVersion(pbId) {
+    const pb = await db.getPlaybookById(pbId);
     const latestVer = parseFloat(pb.currentVersion) || 1.0;
     const newVerStr = (latestVer + 0.1).toFixed(1);
     const curVer = pb.versions.find(v => v.version === pb.currentVersion) || {};
     const newVer = { ...curVer, version: newVerStr, status: 'Draft', createdAt: new Date().toISOString().split('T')[0], improvements: '' };
     const updated = { ...pb, currentVersion: newVerStr, status: 'Draft', versions: [...pb.versions, newVer] };
-    db.savePlaybook(updated);
+    await db.savePlaybook(updated);
     app.toast(`Version ${newVerStr} created as Draft`, 'success');
-    init(); _renderDetailPanel(pbId);
+    await init();
+    await _renderDetailPanel(pbId);
   }
 
   function _setupSearch() {
     const search = document.getElementById('pb-search');
     const statusF = document.getElementById('pb-filter-status');
-    if (search) { const f = search.cloneNode(true); search.parentNode.replaceChild(f, search); f.addEventListener('input', () => _renderTable(f.value)); }
-    if (statusF) { const f = statusF.cloneNode(true); statusF.parentNode.replaceChild(f, statusF); f.addEventListener('change', () => _renderTable(document.getElementById('pb-search')?.value || '')); }
+    if (search) { const f = search.cloneNode(true); search.parentNode.replaceChild(f, search); f.addEventListener('input', async () => await _renderTable(f.value)); }
+    if (statusF) { const f = statusF.cloneNode(true); statusF.parentNode.replaceChild(f, statusF); f.addEventListener('change', async () => await _renderTable(document.getElementById('pb-search')?.value || '')); }
   }
 
   function _setupNewBtn() {
@@ -375,7 +378,7 @@ const playbookModule = (() => {
       </div>`;
       app.openModal('New Playbook', content, [
         { id: 'cancel', label: 'Cancel', class: 'btn-secondary', onClick: app.closeModal },
-        { id: 'save', label: 'Create Playbook', class: 'btn-primary', onClick: () => {
+        { id: 'save', label: 'Create Playbook', class: 'btn-primary', onClick: async () => {
           const name = document.getElementById('np-name')?.value.trim();
           const category = document.getElementById('np-category')?.value;
           const objective = document.getElementById('np-objective')?.value.trim();
@@ -384,10 +387,10 @@ const playbookModule = (() => {
           const pb = { id: db.generateId('pb'), name, currentVersion: '1.0', status: 'Draft', category, createdAt: today,
             versions: [{ version: '1.0', status: 'Draft', createdAt: today, objective, description: '', marketType: '', suitableTrend: 'Uptrend', riskCategory: 'Medium', idealHoldingPeriod: '', entryRules: [], exitRules: { day5Rule: true, atrExtension: true, ema20Exit: true, customRules: [] }, riskRules: { maxInitialRisk: 1, maxPyramid: 1, portfolioHeatGuideline: 4 }, checklist: [], improvements: '' }]
           };
-          db.savePlaybook(pb);
+          await db.savePlaybook(pb);
           app.closeModal();
           app.toast(`Playbook "${name}" created as Draft`, 'success');
-          init();
+          await init();
         }}
       ]);
     });

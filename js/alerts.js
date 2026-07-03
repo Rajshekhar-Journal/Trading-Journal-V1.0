@@ -1,26 +1,27 @@
 /**
- * alerts.js — Alert Engine
+ * alerts.js — Alert Engine (Phase 2 — async)
  * Evaluates alert conditions for all open trades.
  */
 const alertEngine = (() => {
 
   const ALERT_TYPES = {
-    DAY5_EXIT: 'Day-5 Exit Due',
-    ATR_EXTENSION: 'ATR Extension Reached',
-    EMA20_DISTANCE: 'EMA20 Distance Reached',
+    DAY5_EXIT:       'Day-5 Exit Due',
+    ATR_EXTENSION:   'ATR Extension Reached',
+    EMA20_DISTANCE:  'EMA20 Distance Reached',
     EMA20_BREAKDOWN: 'EMA20 Breakdown Alert',
-    STOP_BREACH: 'Stop Loss Breach',
-    CUSTOM_RULE: 'Custom Rule Alert'
+    STOP_BREACH:     'Stop Loss Breach',
+    CUSTOM_RULE:     'Custom Rule Alert'
   };
 
   const ALERT_STATUS = { PENDING: 'Pending', TRIGGERED: 'Triggered', COMPLETED: 'Completed', DISMISSED: 'Dismissed' };
 
-  function checkAllAlerts(openTrades) {
-    const settings = db.getSettings();
+  // Phase 2: async — receives openTrades array and settings object (pre-fetched by caller)
+  async function checkAllAlerts(openTrades, settings) {
+    if (!settings) settings = await db.getSettings();
     const alertConfig = settings.alerts || {};
     const updated = [];
 
-    openTrades.forEach(trade => {
+    for (const trade of openTrades) {
       const alerts = [...(trade.alerts || [])];
       const m = calc.getTradeMetrics(trade);
       const holdingDays = m.holdingDays;
@@ -40,10 +41,11 @@ const alertEngine = (() => {
       }
 
       if (dirty.changed) {
-        updated.push({ ...trade, alerts });
-        db.saveTrade({ ...trade, alerts });
+        const updated_trade = { ...trade, alerts };
+        updated.push(updated_trade);
+        await db.saveTrade(updated_trade);
       }
-    });
+    }
 
     return updated;
   }
@@ -74,22 +76,22 @@ const alertEngine = (() => {
     return all;
   }
 
-  function dismissAlert(tradeId, alertType) {
-    const trade = db.getTradeById(tradeId);
+  async function dismissAlert(tradeId, alertType) {
+    const trade = await db.getTradeById(tradeId);
     if (!trade) return;
     const alerts = (trade.alerts || []).map(a =>
       a.type === alertType ? { ...a, status: ALERT_STATUS.DISMISSED } : a
     );
-    db.saveTrade({ ...trade, alerts });
+    await db.saveTrade({ ...trade, alerts });
   }
 
-  function completeAlert(tradeId, alertType) {
-    const trade = db.getTradeById(tradeId);
+  async function completeAlert(tradeId, alertType) {
+    const trade = await db.getTradeById(tradeId);
     if (!trade) return;
     const alerts = (trade.alerts || []).map(a =>
       a.type === alertType ? { ...a, status: ALERT_STATUS.COMPLETED } : a
     );
-    db.saveTrade({ ...trade, alerts });
+    await db.saveTrade({ ...trade, alerts });
   }
 
   return { ALERT_TYPES, ALERT_STATUS, checkAllAlerts, getActiveAlerts, dismissAlert, completeAlert };

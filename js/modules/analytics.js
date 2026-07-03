@@ -7,21 +7,21 @@ const analyticsModule = (() => {
   let _activeTab = 'performance';
   let _charts = [];
 
-  function init() {
+  async function init() {
     _setupDateFilter();
     _setupTabBar();
-    _renderTab(_activeTab);
+    await _renderTab(_activeTab);
   }
 
   function _setupDateFilter() {
     document.querySelectorAll('#anl-date-filter .filter-btn').forEach(btn => {
       const fresh = btn.cloneNode(true);
       btn.parentNode.replaceChild(fresh, btn);
-      fresh.addEventListener('click', () => {
+      fresh.addEventListener('click', async () => {
         document.querySelectorAll('#anl-date-filter .filter-btn').forEach(b => b.classList.remove('active'));
         fresh.classList.add('active');
         _range = fresh.dataset.range;
-        _renderTab(_activeTab);
+        await _renderTab(_activeTab);
       });
     });
   }
@@ -30,31 +30,32 @@ const analyticsModule = (() => {
     document.querySelectorAll('#anl-tab-bar .tab-btn').forEach(btn => {
       const fresh = btn.cloneNode(true);
       btn.parentNode.replaceChild(fresh, btn);
-      fresh.addEventListener('click', () => {
+      fresh.addEventListener('click', async () => {
         document.querySelectorAll('#anl-tab-bar .tab-btn').forEach(b => b.classList.remove('active'));
         fresh.classList.add('active');
         _activeTab = fresh.dataset.tab;
-        _renderTab(_activeTab);
+        await _renderTab(_activeTab);
       });
     });
   }
 
-  function _renderTab(tab) {
+  async function _renderTab(tab) {
     _charts.forEach(c => { try { c.destroy(); } catch(e) {} });
     _charts = [];
     const el = document.getElementById('anl-content');
     if (!el) return;
-    const trades = calc.filterByDateRange(db.getClosedTrades(), _range);
-    if (tab === 'performance') _tabPerformance(el, trades);
+    const closedTrades = await db.getClosedTrades();
+    const trades = calc.filterByDateRange(closedTrades, _range);
+    if (tab === 'performance') await _tabPerformance(el, trades);
     else if (tab === 'trade-analytics') _tabTradeAnalytics(el, trades);
-    else if (tab === 'playbook-analytics') _tabPlaybookAnalytics(el, trades);
-    else if (tab === 'risk') _tabRisk(el, trades);
+    else if (tab === 'playbook-analytics') await _tabPlaybookAnalytics(el, trades);
+    else if (tab === 'risk') await _tabRisk(el, trades);
     else if (tab === 'discipline') _tabDiscipline(el, trades);
-    else if (tab === 'simulator') _tabSimulator(el, trades);
+    else if (tab === 'simulator') await _tabSimulator(el, trades);
   }
 
   // ── TAB 1: Performance ─────────────────────────────────────────────────────
-  function _tabPerformance(el, trades) {
+  async function _tabPerformance(el, trades) {
     const wr = calc.getWinRate(trades);
     const netPnl = calc.getTotalPnl(trades);
     const netR = calc.getTotalR(trades);
@@ -113,7 +114,7 @@ const analyticsModule = (() => {
   }
 
   // Chart toggle: Cumulative P&L ↔ Cumulative Equity
-  function _switchCumChart(mode) {
+  async function _switchCumChart(mode) {
     const btnPnl = document.getElementById('btn-cum-pnl');
     const btnEq  = document.getElementById('btn-cum-eq');
     const titleEl= document.getElementById('anl-pnl-chart-title');
@@ -125,7 +126,7 @@ const analyticsModule = (() => {
     const existingIdx = _charts.findIndex(c => c?.canvas?.id === 'anl-equity-chart');
     if (existingIdx >= 0) { try { _charts[existingIdx].destroy(); } catch(e) {} _charts.splice(existingIdx, 1); }
 
-    const closedTrades = db.getClosedTrades();
+    const closedTrades = await db.getClosedTrades();
     const dailyArr  = calc.getDailyPnl(closedTrades);
     const labels    = dailyArr.map(d => d.date.slice(5));
 
@@ -135,10 +136,9 @@ const analyticsModule = (() => {
       _charts.push(_makeLineChart('anl-equity-chart', labels, cumData, 'Cumulative P&L', '#5b6af0'));
     } else {
       if (titleEl) titleEl.textContent = 'Cumulative Equity';
-      const capital     = db.getCapital();
+      const capital     = await db.getCapital();
       const netDeposits = calc.getNetDeposits(capital);
       const eqData = dailyArr.map(d => Math.round(netDeposits + d.cumPnl));
-      _labels_start = ['Start', ...labels];
       const fullData = [netDeposits, ...eqData];
       _charts.push(_makeLineChart('anl-equity-chart', ['Start', ...labels], fullData, 'Cumulative Equity', '#22c55e'));
     }
@@ -248,8 +248,8 @@ const analyticsModule = (() => {
   }
 
   // ── TAB 3: Playbook Analytics ──────────────────────────────────────────────
-  function _tabPlaybookAnalytics(el, trades) {
-    const pbs = db.getPlaybooks();
+  async function _tabPlaybookAnalytics(el, trades) {
+    const pbs = await db.getPlaybooks();
     const rows = pbs.map(pb => {
       const ts = trades.filter(t => t.playbookId === pb.id);
       if (!ts.length) return null;
@@ -305,11 +305,11 @@ const analyticsModule = (() => {
   }
 
   // ── TAB 4: Risk Analytics ──────────────────────────────────────────────────
-  function _tabRisk(el, trades) {
-    const openTrades = db.getOpenTrades();
+  async function _tabRisk(el, trades) {
+    const openTrades = await db.getOpenTrades();
     const heat = calc.getPortfolioHeat(openTrades);
     const violations = trades.filter(t => !t.ruleFollowed);
-    const settings = db.getSettings();
+    const settings = await db.getSettings();
     const maxHeat = settings?.riskManagement?.maxPortfolioHeat || 4;
 
     el.innerHTML = `<div class="anl-tab-content">
@@ -377,12 +377,12 @@ const analyticsModule = (() => {
   }
 
   // ── TAB 6: Growth Simulator ────────────────────────────────────────────────
-  function _tabSimulator(el, trades) {
-    const capital = db.getCapital();
-    const closedTrades = db.getClosedTrades();
+  async function _tabSimulator(el, trades) {
+    const capital = await db.getCapital();
+    const closedTrades = await db.getClosedTrades();
     const realizedPnl = calc.getTotalPnl(closedTrades);
     const equity = calc.getCurrentEquity(capital, realizedPnl);
-    const settings = db.getSettings();
+    const settings = await db.getSettings();
     const currentRPT = calc.getCurrentR(equity, settings);
     const wr = calc.getWinRate(trades);
     const { avgWinR, avgLossR } = calc.getAvgWinLoss(trades);

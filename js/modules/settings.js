@@ -17,10 +17,10 @@ const settingsModule = (() => {
     { id: 'formulas', label: '𝑓 Formula Manager', icon: '🔢' },
   ];
 
-  function init() {
+  async function init() {
     _renderNav();
     _setupSearch();
-    _showPage(_activePage);
+    await _showPage(_activePage);
   }
 
   function _renderNav(filter = '') {
@@ -41,19 +41,23 @@ const settingsModule = (() => {
     fresh.addEventListener('input', () => _renderNav(fresh.value));
   }
 
-  function _goPage(pageId) {
+  async function _goPage(pageId) {
     if (_hasUnsaved && !confirm('You have unsaved changes. Discard?')) return;
     _hasUnsaved = false;
     _activePage = pageId;
     _renderNav();
-    _showPage(pageId);
+    await _showPage(pageId);
   }
 
-  function _showPage(id) {
+  async function _showPage(id) {
     const el = document.getElementById('settings-content');
     if (!el) return;
-    const pages = { general: _pageGeneral, trading: _pageTrading, risk: _pageRisk, charges: _pageCharges, alerts: _pageAlerts, data: _pageData, app: _pageApp, formulas: _pageFormulas };
-    el.innerHTML = pages[id] ? pages[id]() : `<div class="no-data">Page not found.</div>`;
+    const asyncPages = { general: _pageGeneral, trading: _pageTrading, risk: _pageRisk, charges: _pageCharges, alerts: _pageAlerts, data: _pageData, app: _pageApp, formulas: _pageFormulas };
+    if (asyncPages[id]) {
+      el.innerHTML = await asyncPages[id]();
+    } else {
+      el.innerHTML = `<div class="no-data">Page not found.</div>`;
+    }
     _setupUnsavedDetect();
   }
 
@@ -71,8 +75,9 @@ const settingsModule = (() => {
   }
 
   // ── PAGE: General ──────────────────────────────────────────────────────────
-  function _pageGeneral() {
-    const s = db.getSettings()?.general || {};
+  async function _pageGeneral() {
+    const settings = await db.getSettings();
+    const s = settings?.general || {};
     return `<div class="settings-page">
       <div class="settings-section-header">General Settings</div>
       <div class="form-grid">
@@ -100,10 +105,10 @@ const settingsModule = (() => {
     </div>`;
   }
 
-  function _saveGeneral() {
-    const settings = db.getSettings();
+  async function _saveGeneral() {
+    const settings = await db.getSettings();
     settings.general = { ...settings.general, traderName: document.getElementById('s-name')?.value, currency: document.getElementById('s-currency')?.value, timezone: document.getElementById('s-tz')?.value, dateFormat: document.getElementById('s-datefmt')?.value, fyStart: document.getElementById('s-fyr')?.value, defaultStartupModule: document.getElementById('s-startup')?.value, defaultDateRange: document.getElementById('s-defrange')?.value };
-    db.saveSettings(settings);
+    await db.saveSettings(settings);
     _hasUnsaved = false;
     app.toast('General settings saved', 'success');
     const name = settings.general.traderName;
@@ -111,11 +116,12 @@ const settingsModule = (() => {
   }
 
   // ── PAGE: Trading Defaults ─────────────────────────────────────────────────
-  function _pageTrading() {
-    const s = db.getSettings()?.tradingDefaults || {};
-    const rm = db.getSettings()?.riskManagement || {};
-    const capital = db.getCapital();
-    const closedTrades = db.getClosedTrades();
+  async function _pageTrading() {
+    const settings = await db.getSettings();
+    const s = settings?.tradingDefaults || {};
+    const rm = settings?.riskManagement || {};
+    const capital = await db.getCapital();
+    const closedTrades = await db.getClosedTrades();
     const realizedPnl = calc.getTotalPnl(closedTrades);
     const equity = calc.getCurrentEquity(capital, realizedPnl);
     const computedRPT = rm.riskMode === 'Fixed'
@@ -150,8 +156,8 @@ const settingsModule = (() => {
     </div>`;
   }
 
-  function _saveTrading() {
-    const settings = db.getSettings();
+  async function _saveTrading() {
+    const settings = await db.getSettings();
     settings.tradingDefaults = {
       tradeType: document.getElementById('td-type')?.value,
       direction: document.getElementById('td-dir')?.value,
@@ -159,14 +165,15 @@ const settingsModule = (() => {
       defaultReviewStatus: document.getElementById('td-review')?.value
       // defaultRPT is computed dynamically from Risk Management — not stored here
     };
-    db.saveSettings(settings);
+    await db.saveSettings(settings);
     _hasUnsaved = false;
     app.toast('Trading defaults saved', 'success');
   }
 
   // ── PAGE: Risk Management ──────────────────────────────────────────────────
-  function _pageRisk() {
-    const s = db.getSettings()?.riskManagement || {};
+  async function _pageRisk() {
+    const settings = await db.getSettings();
+    const s = settings?.riskManagement || {};
     return `<div class="settings-page">
       <div class="settings-section-header">Risk Management</div>
       <div class="form-grid cols-3">
@@ -196,18 +203,19 @@ const settingsModule = (() => {
     </div>`;
   }
 
-  function _saveRisk() {
-    const settings = db.getSettings();
+  async function _saveRisk() {
+    const settings = await db.getSettings();
     const mode = document.querySelector('input[name="rm-mode"]:checked')?.value || 'Dynamic';
     settings.riskManagement = { ...settings.riskManagement, maxPortfolioHeat: parseFloat(document.getElementById('rm-maxheat')?.value) || 4, warningPortfolioHeat: parseFloat(document.getElementById('rm-warnheat')?.value) || 3.5, maxRPT: parseFloat(document.getElementById('rm-maxrpt')?.value) || 15000, riskMode: mode, riskPercent: parseFloat(document.getElementById('rm-riskpct')?.value) || 1, fixedRiskAmount: parseFloat(document.getElementById('rm-fixedamt')?.value) || 5000 };
-    db.saveSettings(settings);
+    await db.saveSettings(settings);
     _hasUnsaved = false;
     app.toast('Risk settings saved', 'success');
   }
 
   // ── PAGE: Charges & Brokerage ──────────────────────────────────────────────
-  function _pageCharges() {
-    const s = db.getSettings()?.charges || {};
+  async function _pageCharges() {
+    const settings = await db.getSettings();
+    const s = settings?.charges || {};
     const broker = s.broker || 'Zerodha';
     return `<div class="settings-page">
       <div class="settings-section-header">Charges &amp; Brokerage</div>
@@ -256,11 +264,11 @@ const settingsModule = (() => {
     </div>`;
   }
 
-  function _calcCharges() {
+  async function _calcCharges() {
     const type = document.getElementById('cc-type')?.value;
     const buy = parseFloat(document.getElementById('cc-buy')?.value) || 0;
     const sell = parseFloat(document.getElementById('cc-sell')?.value) || 0;
-    const s = db.getSettings();
+    const s = await db.getSettings();
     const breakdown = calc.getZerodhaCharges(type, buy, sell, s);
     const el = document.getElementById('cc-result');
     if (!el) return;
@@ -271,17 +279,18 @@ const settingsModule = (() => {
       </tbody></table>`;
   }
 
-  function _saveCharges() {
-    const settings = db.getSettings();
+  async function _saveCharges() {
+    const settings = await db.getSettings();
     settings.charges = { broker: document.getElementById('ch-broker')?.value || 'Zerodha', equity: { brokerage: parseFloat(document.getElementById('br-eq-delivery')?.value) || 0 }, intraday: { brokerage: parseFloat(document.getElementById('br-intraday')?.value) || 20 } };
-    db.saveSettings(settings);
+    await db.saveSettings(settings);
     _hasUnsaved = false;
     app.toast('Charge settings saved', 'success');
   }
 
   // ── PAGE: Alerts ───────────────────────────────────────────────────────────
-  function _pageAlerts() {
-    const s = db.getSettings()?.alerts || {};
+  async function _pageAlerts() {
+    const settings = await db.getSettings();
+    const s = settings?.alerts || {};
     const ALERT_TYPES = [
       { id: 'portfolioHeat', name: 'Portfolio Heat', desc: 'Triggers when heat approaches or exceeds max' },
       { id: 'positionRisk', name: 'Position Risk', desc: 'Individual position risk exceeds threshold' },
@@ -316,14 +325,14 @@ const settingsModule = (() => {
     </div>`;
   }
 
-  function _saveAlerts() {
-    const settings = db.getSettings();
+  async function _saveAlerts() {
+    const settings = await db.getSettings();
     const ALERT_IDS = ['portfolioHeat','positionRisk','stopBreach','day5Exit','ruleBroken','revengeTrade','ema20Exit','atrExtension'];
     settings.alerts = {};
     ALERT_IDS.forEach(id => {
       settings.alerts[id] = { enabled: document.getElementById(`al-${id}-on`)?.checked ?? true, severity: document.getElementById(`al-${id}-sev`)?.value || 'Warning', dashboard: document.getElementById(`al-${id}-dash`)?.checked ?? true, popup: document.getElementById(`al-${id}-pop`)?.checked ?? true };
     });
-    db.saveSettings(settings);
+    await db.saveSettings(settings);
     _hasUnsaved = false;
     app.toast('Alert settings saved', 'success');
   }
@@ -410,15 +419,18 @@ const settingsModule = (() => {
 
   function _checkUpdates() { app.toast('You are on the latest version (v1.0.0)', 'info'); }
 
-  function _verifySystem() {
+  async function _verifySystem() {
     const el = document.getElementById('app-system-result');
     if (!el) return;
+    const trades = await db.getTrades();
+    const settings = await db.getSettings();
+    const capital = await db.getCapital();
     const checks = [
       { name: 'localStorage available', pass: !!window.localStorage },
       { name: 'Chart.js loaded', pass: typeof Chart !== 'undefined' },
-      { name: 'Trades data', pass: db.getTrades().length >= 0 },
-      { name: 'Settings data', pass: !!db.getSettings() },
-      { name: 'Capital data', pass: db.getCapital().length >= 0 },
+      { name: 'Trades data', pass: trades.length >= 0 },
+      { name: 'Settings data', pass: !!settings },
+      { name: 'Capital data', pass: capital.length >= 0 },
     ];
     el.innerHTML = `<table class="data-table"><thead><tr><th>Check</th><th>Status</th></tr></thead><tbody>
       ${checks.map(c => `<tr><td>${c.name}</td><td class="${c.pass ? 'text-success' : 'text-danger'}">${c.pass ? '✓ OK' : '✗ Failed'}</td></tr>`).join('')}
@@ -505,14 +517,14 @@ const settingsModule = (() => {
     });
   }
 
-  function _resetPage() {
+  async function _resetPage() {
     const defaults = db.getDefaultSettings();
-    const settings = db.getSettings();
+    const settings = await db.getSettings();
     const pageMap = { general: 'general', trading: 'tradingDefaults', risk: 'riskManagement', charges: 'charges', alerts: 'alerts' };
     const key = pageMap[_activePage];
-    if (key && defaults[key]) { settings[key] = JSON.parse(JSON.stringify(defaults[key])); db.saveSettings(settings); }
+    if (key && defaults[key]) { settings[key] = JSON.parse(JSON.stringify(defaults[key])); await db.saveSettings(settings); }
     app.toast('Page reset to defaults', 'info');
-    _showPage(_activePage);
+    await _showPage(_activePage);
   }
 
   return { init, _goPage, _saveGeneral, _saveTrading, _saveRisk, _saveCharges, _calcCharges, _saveAlerts, _exportData, _importData, _checkUpdates, _verifySystem, _resetApp, _resetPage, _filterFormulas };
