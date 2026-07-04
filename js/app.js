@@ -54,7 +54,7 @@ const app = (() => {
     // Phase 2: logout button
     document.getElementById('btn-logout')?.addEventListener('click', () => auth.signOut());
     // Settings change listener
-    db.on('settings', () => _updateTraderName());
+    db.on('settings', async () => await _updateTraderName());
   }
 
   async function _updateTraderName() {
@@ -102,14 +102,8 @@ const app = (() => {
   }
 
   // ── Market Health Modal ────────────────────────────────────────────────────
-  function showMarketHealthModal() {
-    const mh = db.getMarketHealth();
-    const breadthOptions = [
-      { val: 'Extreme Weakness', label: '🔵 Extreme Weakness (< 0.50)', guidance: 'Look For Reversal' },
-      { val: 'Weak', label: '🔴 Weak (0.50–1.00)', guidance: 'Capital Preservation' },
-      { val: 'Selective', label: '🟡 Selective (1.00–1.50)', guidance: 'Selective Entries' },
-      { val: 'Strong', label: '🟢 Strong (≥ 1.50)', guidance: 'Breakouts Favoured' }
-    ];
+  async function showMarketHealthModal() {
+    const mh = await db.getMarketHealth();
     const content = `
       <div class="form-grid">
         <div class="form-group">
@@ -129,12 +123,12 @@ const app = (() => {
           <div id="mh-classification-display" class="classification-badge">${mh.breadthClassification || 'Strong'} — ${mh.guidance || 'Breakouts Favoured'}</div>
         </div>
         <div class="form-group form-full">
-          <span class="form-hint">Last updated: ${mh.lastUpdated || 'Not set'} &nbsp;|&nbsp; Source: Manual (Phase 1) — Upstox API auto-update planned for Phase 2</span>
+          <span class="form-hint">Last updated: ${mh.lastUpdated || 'Not set'} &nbsp;|&nbsp; Source: Manual entry — NSE live data via API in Phase 3</span>
         </div>
       </div>`;
     openModal('Update Market Health', content, [
       { id: 'cancel', label: 'Cancel', class: 'btn-secondary', onClick: closeModal },
-      { id: 'save', label: 'Save', class: 'btn-primary', onClick: () => {
+      { id: 'save', label: 'Save', class: 'btn-primary', onClick: async () => {
         const trend = document.getElementById('mh-trend').value;
         const breadthValue = parseFloat(document.getElementById('mh-breadth').value) || 0;
         let breadthClassification, guidance;
@@ -142,7 +136,7 @@ const app = (() => {
         else if (breadthValue < 1.0) { breadthClassification = 'Weak'; guidance = 'Capital Preservation'; }
         else if (breadthValue < 1.5) { breadthClassification = 'Selective'; guidance = 'Selective Entries'; }
         else { breadthClassification = 'Strong'; guidance = 'Breakouts Favoured'; }
-        db.saveMarketHealth({ trend, breadthValue, breadthClassification, guidance });
+        await db.saveMarketHealth({ trend, breadthValue, breadthClassification, guidance });
         closeModal();
         toast('Market Health updated', 'success');
         if (_currentModule === 'dashboard') dashboardModule.init();
