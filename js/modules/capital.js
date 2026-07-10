@@ -146,7 +146,10 @@ const capitalModule = (() => {
         <td class="font-mono">${calc.formatCurrency(balance)}</td>
         <td>${txn.account||'Zerodha'}</td>
         <td>${txn.remarks||'—'}</td>
-        <td><button class="btn btn-danger btn-xs" onclick="capitalModule._deleteTxn('${txn.id}')">✕</button></td>
+        <td style="display:flex;gap:6px;">
+          <button class="btn btn-secondary btn-xs" onclick="capitalModule._editTxn('${txn.id}')">✏ Edit</button>
+          <button class="btn btn-danger btn-xs" onclick="capitalModule._deleteTxn('${txn.id}')">✕ Delete</button>
+        </td>
       </tr>`;
     }).join('');
   }
@@ -154,8 +157,52 @@ const capitalModule = (() => {
   async function _deleteTxn(id) {
     if (!confirm('Delete this transaction?')) return;
     await db.deleteCapitalTransaction(id);
-    app.toast('Transaction deleted','success');
+    app.toast('Transaction deleted', 'success');
     await init();
+  }
+
+  async function _editTxn(id) {
+    const capital = await db.getCapital();
+    const txn = capital.find(c => c.id === id);
+    if (!txn) { app.toast('Transaction not found', 'error'); return; }
+
+    const content = `<div class="form-grid">
+      <div class="form-group"><label class="form-label">Transaction Type</label>
+        <select class="form-select" id="cap-type">
+          <option ${txn.type==='Deposit'?'selected':''}>Deposit</option>
+          <option ${txn.type==='Withdrawal'?'selected':''}>Withdrawal</option>
+          <option ${txn.type==='Adjustment'?'selected':''}>Adjustment</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Date</label>
+        <input class="form-input" type="date" id="cap-date" value="${txn.date}">
+      </div>
+      <div class="form-group"><label class="form-label">Amount (₹) *</label>
+        <input class="form-input" type="number" id="cap-amount" min="1" value="${txn.amount}">
+      </div>
+      <div class="form-group"><label class="form-label">Account</label>
+        <input class="form-input" id="cap-account" value="${txn.account||txn.note||'Zerodha'}">
+      </div>
+      <div class="form-group form-full"><label class="form-label">Remarks</label>
+        <input class="form-input" id="cap-remarks" value="${txn.remarks||''}" placeholder="e.g. Monthly top-up">
+      </div>
+    </div>`;
+
+    app.openModal('Edit Capital Transaction', content, [
+      { id: 'cancel', label: 'Cancel', class: 'btn-secondary', onClick: app.closeModal },
+      { id: 'save', label: 'Update Transaction', class: 'btn-primary', onClick: async () => {
+        const type    = document.getElementById('cap-type').value;
+        const date    = document.getElementById('cap-date').value;
+        const amount  = parseFloat(document.getElementById('cap-amount').value);
+        const account = document.getElementById('cap-account').value || 'Zerodha';
+        const remarks = document.getElementById('cap-remarks').value;
+        if (!date || !amount || amount <= 0) { app.toast('Please fill Date and Amount', 'error'); return; }
+        await db.saveCapitalTransaction({ id, type, date, amount, account, remarks });
+        app.closeModal();
+        app.toast('Transaction updated', 'success');
+        await init();
+      }}
+    ]);
   }
 
   // ── Add Transaction ────────────────────────────────────────────────────────
@@ -193,5 +240,5 @@ const capitalModule = (() => {
     });
   }
 
-  return { init, _deleteTxn };
+  return { init, _deleteTxn, _editTxn };
 })();
