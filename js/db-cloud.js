@@ -146,6 +146,7 @@ const db = (() => {
       type:           r.type,
       amount:         r.amount,
       note:           r.note,
+      remarks:        r.note, // map to remarks for UI
       runningBalance: r.running_balance,
     }));
   }
@@ -154,28 +155,35 @@ const db = (() => {
     const uid = _uid();
     // Calculate running balance
     const existing = await getCapital();
-    const allTxns  = txn.id
+    const isExisting = txn.id && existing.some(c => c.id === txn.id);
+    const newTxn = { id: _generateId('cap'), ...txn };
+    const allTxns = isExisting
       ? existing.map(c => c.id === txn.id ? { ...c, ...txn } : c)
-      : [...existing, { ...txn, id: txn.id || _generateId('cap') }];
+      : [...existing, newTxn];
+      
     allTxns.sort((a, b) => new Date(a.date) - new Date(b.date));
+    
     let balance = 0;
     allTxns.forEach(c => {
       if (c.type === 'Deposit' || c.type === 'Adjustment') balance += Number(c.amount);
       else if (c.type === 'Withdrawal') balance -= Number(c.amount);
       c.runningBalance = balance;
     });
+    
     // Upsert the target txn (with updated running balance)
-    const target = allTxns.find(c => c.id === (txn.id || allTxns[allTxns.length - 1].id));
+    const target = allTxns.find(c => c.id === (txn.id || newTxn.id));
     if (!target) return;
+    
     const { error } = await _sb().from('capital').upsert({
       id:              target.id,
       user_id:         uid,
       date:            target.date,
       type:            target.type,
       amount:          target.amount,
-      note:            target.note || null,
+      note:            target.remarks || target.note || null,
       running_balance: target.runningBalance,
     }, { onConflict: 'id' });
+    
     if (error) { console.error('saveCapitalTransaction:', error); return; }
     // Recalculate all running balances and update in bulk
     await _recalcCapitalBalances();
@@ -196,7 +204,7 @@ const db = (() => {
     const updates = all.map(c => {
       if (c.type === 'Deposit' || c.type === 'Adjustment') balance += Number(c.amount);
       else if (c.type === 'Withdrawal') balance -= Number(c.amount);
-      return { id: c.id, user_id: _uid(), date: c.date, type: c.type, amount: c.amount, note: c.note, running_balance: balance };
+      return { id: c.id, user_id: _uid(), date: c.date, type: c.type, amount: c.amount, note: c.remarks || c.note, running_balance: balance };
     });
     if (updates.length > 0) {
       await _sb().from('capital').upsert(updates, { onConflict: 'id' });
