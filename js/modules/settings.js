@@ -235,10 +235,10 @@ const settingsModule = (() => {
             <td class="editable-cell"><input class="form-input" type="number" id="br-eq-delivery" value="${s.equity?.brokerage ?? 0}" step="1" style="width:80px"> ₹/trade</td>
             <td><span class="badge badge-primary">Editable</span></td>
           </tr>
-          <tr><td>STT</td><td class="readonly-cell">0.1% on sell side</td><td><span class="badge badge-muted">Auto</span></td></tr>
+          <tr><td>STT</td><td class="readonly-cell">0.1% on both sides</td><td><span class="badge badge-muted">Auto</span></td></tr>
           <tr><td>Exchange Txn</td><td class="readonly-cell">0.00335%</td><td><span class="badge badge-muted">Auto</span></td></tr>
           <tr><td>SEBI Fee</td><td class="readonly-cell">₹10 per crore</td><td><span class="badge badge-muted">Auto</span></td></tr>
-          <tr><td>GST</td><td class="readonly-cell">18% on (brokerage + exchange)</td><td><span class="badge badge-muted">Auto</span></td></tr>
+          <tr><td>GST</td><td class="readonly-cell">18% on (brokerage + exchange + SEBI)</td><td><span class="badge badge-muted">Auto</span></td></tr>
           <tr><td>Stamp Duty</td><td class="readonly-cell">0.015% on buy side</td><td><span class="badge badge-muted">Auto</span></td></tr>
 
           <tr><td rowspan="2" style="font-weight:600;vertical-align:top;padding-top:10px">Intraday / Futures</td>
@@ -246,7 +246,7 @@ const settingsModule = (() => {
             <td class="editable-cell"><input class="form-input" type="number" id="br-intraday" value="${s.intraday?.brokerage ?? 20}" step="1" style="width:80px"> ₹/order</td>
             <td><span class="badge badge-primary">Editable</span></td>
           </tr>
-          <tr><td>Gov. Charges</td><td class="readonly-cell">Same as above (STT 0.025% both sides for intraday)</td><td><span class="badge badge-muted">Auto</span></td></tr>
+          <tr><td>Gov. Charges</td><td class="readonly-cell">Same as above (STT 0.025% on sell side for intraday)</td><td><span class="badge badge-muted">Auto</span></td></tr>
         </tbody>
       </table>
 

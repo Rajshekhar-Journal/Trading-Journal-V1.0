@@ -330,7 +330,7 @@ const calc = (() => {
       stt = totalTurnover * Number(c.stt || 0.001);
       exchangeCharge = totalTurnover * Number(c.exchangeCharge || 0.0000335);
       sebiCharge = totalTurnover * Number(c.sebiCharge || 0.000001);
-      gst = (brokerage + exchangeCharge) * Number(c.gst || 0.18);
+      gst = (brokerage + exchangeCharge + sebiCharge) * Number(c.gst || 0.18);
       stampDuty = buyTurnover * Number(c.stampDuty || 0.00015);
     } else if (tradeType === 'Intraday') {
       const c = cfg.intraday || {};
@@ -340,7 +340,7 @@ const calc = (() => {
       stt = sellTurnover * Number(c.stt || 0.00025);
       exchangeCharge = totalTurnover * Number(c.exchangeCharge || 0.0000335);
       sebiCharge = totalTurnover * Number(c.sebiCharge || 0.000001);
-      gst = (brokerage + exchangeCharge) * Number(c.gst || 0.18);
+      gst = (brokerage + exchangeCharge + sebiCharge) * Number(c.gst || 0.18);
       stampDuty = buyTurnover * Number(c.stampDuty || 0.00003);
     } else if (tradeType === 'Futures') {
       const c = cfg.futures || {};
@@ -350,7 +350,7 @@ const calc = (() => {
       stt = sellTurnover * Number(c.stt || 0.0002);
       exchangeCharge = totalTurnover * Number(c.exchangeCharge || 0.00002);
       sebiCharge = totalTurnover * Number(c.sebiCharge || 0.000001);
-      gst = (brokerage + exchangeCharge) * Number(c.gst || 0.18);
+      gst = (brokerage + exchangeCharge + sebiCharge) * Number(c.gst || 0.18);
       stampDuty = buyTurnover * Number(c.stampDuty || 0.00002);
     }
 
