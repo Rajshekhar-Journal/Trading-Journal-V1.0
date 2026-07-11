@@ -8,6 +8,8 @@
 const positionsModule = (() => {
   let _selectedTradeId = null;
   let _isFullscreen = false;
+  let _cachedSettings = null;
+  let _cachedDefRPT = 0;
 
   async function init() {
     // Auto-run alert engine on every load
@@ -468,13 +470,16 @@ const positionsModule = (() => {
   async function _showExitModal(tradeId, type) {
     const trade = await db.getTradeById(tradeId);
     if (!trade) return;
+    const settings = await db.getSettings();
+    _cachedSettings = settings;
+
     const m       = calc.getTradeMetrics(trade);
     const today   = new Date().toISOString().split('T')[0];
     const isPartial = type === 'partial';
     const content = `<div class="form-grid">
       <div class="form-group"><label class="form-label">Exit Date</label><input class="form-input" type="date" id="exit-date" value="${today}"></div>
-      <div class="form-group"><label class="form-label">Exit Price (₹)</label><input class="form-input" type="number" id="exit-price" placeholder="e.g. 1350" step="0.05"></div>
-      ${isPartial ? `<div class="form-group"><label class="form-label">Qty to Exit (Open: ${m.openQty})</label><input class="form-input" type="number" id="exit-qty" value="${Math.floor(m.openQty/2)}" min="1" max="${m.openQty}"></div>` : `<input type="hidden" id="exit-qty" value="${m.openQty}">`}
+      <div class="form-group"><label class="form-label">Exit Price (₹)</label><input class="form-input" type="number" id="exit-price" placeholder="e.g. 1350" step="0.05" oninput="positionsModule._autoCalcExitCharges('${trade.tradeType}')"></div>
+      ${isPartial ? `<div class="form-group"><label class="form-label">Qty to Exit (Open: ${m.openQty})</label><input class="form-input" type="number" id="exit-qty" value="${Math.floor(m.openQty/2)}" min="1" max="${m.openQty}" oninput="positionsModule._autoCalcExitCharges('${trade.tradeType}')"></div>` : `<input type="hidden" id="exit-qty" value="${m.openQty}">`}
       <div class="form-group"><label class="form-label">Charges (₹)</label><input class="form-input" type="number" id="exit-charges" value="0" step="0.01"></div>
       <div class="form-group form-full"><label class="form-label">Action Source</label>
         <select class="form-select" id="exit-source">
@@ -524,6 +529,7 @@ const positionsModule = (() => {
     if (!trade) return;
     const today    = new Date().toISOString().split('T')[0];
     const settings = await db.getSettings();
+    _cachedSettings = settings;
     const capital  = await db.getCapital();
     const closedT  = await db.getClosedTrades();
     const realPnl  = calc.getTotalPnl(closedT);
@@ -535,8 +541,8 @@ const positionsModule = (() => {
 
     const content = `<div class="form-grid">
       <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="pyr-date" value="${today}"></div>
-      <div class="form-group"><label class="form-label">Entry Price (₹)</label><input class="form-input" type="number" id="pyr-price" step="0.05"></div>
-      <div class="form-group"><label class="form-label">Qty</label><input class="form-input" type="number" id="pyr-qty" min="1"></div>
+      <div class="form-group"><label class="form-label">Entry Price (₹)</label><input class="form-input" type="number" id="pyr-price" step="0.05" oninput="positionsModule._autoCalcPyramidCharges('${trade.tradeType}')"></div>
+      <div class="form-group"><label class="form-label">Qty</label><input class="form-input" type="number" id="pyr-qty" min="1" oninput="positionsModule._autoCalcPyramidCharges('${trade.tradeType}')"></div>
       <div class="form-group"><label class="form-label">Charges (₹)</label><input class="form-input" type="number" id="pyr-charges" value="0" step="0.01"></div>
       <div class="form-group form-full"><label class="form-label">Notes</label><input class="form-input" id="pyr-notes" placeholder="Reason for pyramid..."></div>
       <div class="form-full" id="pyr-heat-warn"></div>
@@ -642,6 +648,9 @@ const positionsModule = (() => {
     const realPnl   = calc.getTotalPnl(closedT);
     const equity    = calc.getCurrentEquity(capital, realPnl);
     const defRPT    = calc.getCurrentR(equity, settings);
+    
+    _cachedSettings = settings;
+    _cachedDefRPT = defRPT;
 
     const content = `<div class="form-grid">
       <div class="form-group"><label class="form-label">Symbol *</label><input class="form-input" id="nt-symbol" placeholder="e.g. RELIANCE" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"></div>
@@ -651,7 +660,7 @@ const positionsModule = (() => {
         </select>
       </div>
       <div class="form-group"><label class="form-label">Trade Type</label>
-        <select class="form-select" id="nt-type"><option>Equity</option><option>Intraday</option><option>Futures</option></select>
+        <select class="form-select" id="nt-type" onchange="positionsModule._autoCalcTrade('type')"><option>Equity</option><option>Intraday</option><option>Futures</option></select>
       </div>
       <div class="form-group"><label class="form-label">Direction</label>
         <select class="form-select" id="nt-direction"><option>Long</option><option>Short</option></select>
@@ -663,10 +672,10 @@ const positionsModule = (() => {
         </select>
       </div>
       <div class="form-group"><label class="form-label">Entry Date *</label><input class="form-input" type="date" id="nt-date" value="${today}"></div>
-      <div class="form-group"><label class="form-label">Entry Price (₹) *</label><input class="form-input" type="number" id="nt-price" step="0.05" oninput="positionsModule._autoCalcRPT()"></div>
-      <div class="form-group"><label class="form-label">Qty *</label><input class="form-input" type="number" id="nt-qty" min="1" oninput="positionsModule._autoCalcRPT()"></div>
-      <div class="form-group"><label class="form-label">Initial Stop Loss (₹) *</label><input class="form-input" type="number" id="nt-stop" step="0.05" oninput="positionsModule._autoCalcRPT()"></div>
-      <div class="form-group"><label class="form-label">RPT (₹) <span style="color:var(--text-muted);font-weight:400">(auto / default: ${calc.formatCurrency(defRPT)})</span></label><input class="form-input" type="number" id="nt-rpt" placeholder="${defRPT.toFixed(0)}"></div>
+      <div class="form-group"><label class="form-label">Entry Price (₹) *</label><input class="form-input" type="number" id="nt-price" step="0.05" oninput="positionsModule._autoCalcTrade('price')"></div>
+      <div class="form-group"><label class="form-label">Initial Stop Loss (₹) *</label><input class="form-input" type="number" id="nt-stop" step="0.05" oninput="positionsModule._autoCalcTrade('stop')"></div>
+      <div class="form-group"><label class="form-label">Qty *</label><input class="form-input" type="number" id="nt-qty" min="1" oninput="positionsModule._autoCalcTrade('qty')"></div>
+      <div class="form-group"><label class="form-label">RPT (₹) <span style="color:var(--text-muted);font-weight:400">(auto / default: ${calc.formatCurrency(defRPT)})</span></label><input class="form-input" type="number" id="nt-rpt" placeholder="${defRPT.toFixed(0)}" oninput="positionsModule._autoCalcTrade('rpt')"></div>
       <div class="form-group"><label class="form-label">Charges (₹)</label><input class="form-input" type="number" id="nt-charges" value="0"></div>
       <div class="form-group"><label class="form-label">CMP (for P&L tracking)</label><input class="form-input" type="number" id="nt-cmp" step="0.05"></div>
     </div>`;
@@ -706,15 +715,77 @@ const positionsModule = (() => {
     ]);
   }
 
-  function _autoCalcRPT() {
+  function _autoCalcTrade(source) {
     const price = parseFloat(document.getElementById('nt-price')?.value) || 0;
-    const qty   = parseInt(document.getElementById('nt-qty')?.value) || 0;
     const stop  = parseFloat(document.getElementById('nt-stop')?.value) || 0;
+    const qtyEl = document.getElementById('nt-qty');
     const rptEl = document.getElementById('nt-rpt');
-    if (rptEl && price && qty && stop) {
-      rptEl.value = Math.abs((price - stop) * qty).toFixed(0);
+    const type  = document.getElementById('nt-type')?.value || 'Equity';
+    const chargesEl = document.getElementById('nt-charges');
+
+    let qty = parseInt(qtyEl?.value) || 0;
+    let rpt = parseFloat(rptEl?.value) || _cachedDefRPT;
+
+    // Position Sizing Logic
+    if (price && stop) {
+      const riskPerShare = Math.abs(price - stop);
+      if (riskPerShare > 0) {
+        if (source === 'price' || source === 'stop') {
+          // Calculate target Qty based on default RPT
+          qty = Math.floor(_cachedDefRPT / riskPerShare);
+          if (qtyEl) qtyEl.value = qty;
+          rpt = qty * riskPerShare;
+          if (rptEl) rptEl.value = rpt.toFixed(0);
+        } else if (source === 'qty') {
+          // User manually edited Qty, update RPT
+          rpt = qty * riskPerShare;
+          if (rptEl) rptEl.value = rpt.toFixed(0);
+        } else if (source === 'rpt') {
+          // User manually edited RPT, update Qty
+          qty = Math.floor(rpt / riskPerShare);
+          if (qtyEl) qtyEl.value = qty;
+        }
+      }
+    }
+
+    // Charges Logic (Buy Side Only)
+    if (price && qty && _cachedSettings && chargesEl) {
+      const buyTurnover = price * qty;
+      const charges = calc.getZerodhaCharges(type, buyTurnover, 0, _cachedSettings);
+      chargesEl.value = charges.total.toFixed(2);
+    } else if (chargesEl) {
+      chargesEl.value = '0';
     }
   }
 
-  return { init, _onRowClick, _closePanel, _toggleFullscreen, _showExitModal, _showPyramidModal, _showStopModal, _showNoteModal, _showCmpModal, _autoCalcRPT, _editLifecycleRow, _deleteLifecycleRow };
+  function _autoCalcExitCharges(type) {
+    const price = parseFloat(document.getElementById('exit-price')?.value) || 0;
+    const qty = parseInt(document.getElementById('exit-qty')?.value) || 0;
+    const chargesEl = document.getElementById('exit-charges');
+
+    if (price && qty && _cachedSettings && chargesEl) {
+      const sellTurnover = price * qty;
+      // Pass 0 for buy turnover, sellTurnover for sell side
+      const charges = calc.getZerodhaCharges(type, 0, sellTurnover, _cachedSettings);
+      chargesEl.value = charges.total.toFixed(2);
+    } else if (chargesEl) {
+      chargesEl.value = '0';
+    }
+  }
+
+  function _autoCalcPyramidCharges(type) {
+    const price = parseFloat(document.getElementById('pyr-price')?.value) || 0;
+    const qty = parseInt(document.getElementById('pyr-qty')?.value) || 0;
+    const chargesEl = document.getElementById('pyr-charges');
+
+    if (price && qty && _cachedSettings && chargesEl) {
+      const buyTurnover = price * qty;
+      const charges = calc.getZerodhaCharges(type, buyTurnover, 0, _cachedSettings);
+      chargesEl.value = charges.total.toFixed(2);
+    } else if (chargesEl) {
+      chargesEl.value = '0';
+    }
+  }
+
+  return { init, _onRowClick, _closePanel, _toggleFullscreen, _showExitModal, _showPyramidModal, _showStopModal, _showNoteModal, _showCmpModal, _autoCalcTrade, _autoCalcExitCharges, _autoCalcPyramidCharges, _editLifecycleRow, _deleteLifecycleRow };
 })();
