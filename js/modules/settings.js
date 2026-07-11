@@ -217,6 +217,9 @@ const settingsModule = (() => {
     const settings = await db.getSettings();
     const s = settings?.charges || {};
     const broker = s.broker || 'Zerodha';
+    const exchange = s.exchangePreference || 'NSE';
+    const excDisplay = ((s.equity?.exchangeCharge || 0) * 100).toFixed(5);
+
     return `<div class="settings-page">
       <div class="settings-section-header">Charges &amp; Brokerage</div>
       <div class="form-group"><label class="form-label">Broker</label>
@@ -226,51 +229,49 @@ const settingsModule = (() => {
           <option ${broker==='Custom'?'selected':''}>Custom</option>
         </select>
       </div>
-      <div class="alert-banner info" style="margin:12px 0">ℹ All rates are fully editable. Percentages should be entered directly (e.g. 0.1 for 0.1%). Changes here only affect the Charge Calculator and future transactions.</div>
-      <table class="charges-table" style="text-align:center">
-        <thead><tr><th style="text-align:left">Charge Type</th><th>Equity Delivery</th><th>Intraday</th><th>Futures</th></tr></thead>
+      <div class="alert-banner info" style="margin:12px 0">ℹ Government charges (STT, Exchange, SEBI, GST, Stamp) are pre-loaded from SEBI/NSE circulars. Only brokerage is manually editable below.</div>
+      <table class="charges-table">
+        <thead><tr><th>Segment</th><th>Charge</th><th>Rate / Amount</th><th>Type</th></tr></thead>
         <tbody>
-          <tr><td style="text-align:left;font-weight:500">Brokerage (Flat ₹)</td>
-            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="br-eq-flat" value="${s.equity?.brokerage ?? 0}" step="1"></td>
-            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="br-in-flat" value="${s.intraday?.brokerage ?? 20}" step="1"></td>
-            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="br-fu-flat" value="${s.futures?.brokerage ?? 20}" step="1"></td>
+          <tr><td rowspan="6" style="font-weight:600;vertical-align:top;padding-top:10px">Equity Delivery</td>
+            <td>Brokerage</td>
+            <td class="editable-cell"><input class="form-input" type="number" id="br-eq-delivery" value="${s.equity?.brokerage ?? 0}" step="1" style="width:80px"> ₹/trade</td>
+            <td><span class="badge badge-primary">Editable</span></td>
           </tr>
-          <tr><td style="text-align:left;font-weight:500">Brokerage (%)</td>
-            <td><span class="badge badge-muted">N/A</span></td>
-            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="br-in-pct" value="${(s.intraday?.brokeragePercent ?? 0.0003) * 100}" step="0.001"></td>
-            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="br-fu-pct" value="${(s.futures?.brokeragePercent ?? 0.0003) * 100}" step="0.001"></td>
+          <tr><td>STT</td><td class="readonly-cell">${(s.equity?.stt || 0) * 100}% on both sides</td><td><span class="badge badge-muted">Auto</span></td></tr>
+          <tr>
+            <td>Exchange Txn</td>
+            <td class="readonly-cell" style="display:flex;align-items:center;gap:8px">
+              ${excDisplay}% 
+              <select class="form-select" style="width:60px;padding:2px;font-size:11px" onchange="settingsModule._toggleExchange(this.value)">
+                <option value="NSE" ${exchange==='NSE'?'selected':''}>NSE</option>
+                <option value="BSE" ${exchange==='BSE'?'selected':''}>BSE</option>
+              </select>
+            </td>
+            <td><span class="badge badge-muted">Auto</span></td>
           </tr>
-          <tr><td style="text-align:left;font-weight:500">STT (%)</td>
-            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="stt-eq" value="${(s.equity?.stt ?? 0.001) * 100}" step="0.001"></td>
-            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="stt-in" value="${(s.intraday?.stt ?? 0.00025) * 100}" step="0.001"></td>
-            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="stt-fu" value="${(s.futures?.stt ?? 0.0002) * 100}" step="0.001"></td>
+          <tr><td>SEBI Fee</td><td class="readonly-cell">₹${((s.equity?.sebiCharge || 0) * 10000000).toFixed(0)} per crore</td><td><span class="badge badge-muted">Auto</span></td></tr>
+          <tr><td>GST</td><td class="readonly-cell">${(s.equity?.gst || 0) * 100}% on (brokerage + exchange + SEBI)</td><td><span class="badge badge-muted">Auto</span></td></tr>
+          <tr><td>Stamp Duty</td><td class="readonly-cell">${(s.equity?.stampDuty || 0) * 100}% on buy side</td><td><span class="badge badge-muted">Auto</span></td></tr>
+
+          <tr><td rowspan="2" style="font-weight:600;vertical-align:top;padding-top:10px">Intraday / Futures</td>
+            <td>Brokerage</td>
+            <td class="editable-cell"><input class="form-input" type="number" id="br-intraday" value="${s.intraday?.brokerage ?? 20}" step="1" style="width:80px"> ₹/order</td>
+            <td><span class="badge badge-primary">Editable</span></td>
           </tr>
-          <tr><td style="text-align:left;font-weight:500">Exchange Txn (%)</td>
-            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="exc-eq" value="${(s.equity?.exchangeCharge ?? 0.0000335) * 100}" step="0.0001"></td>
-            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="exc-in" value="${(s.intraday?.exchangeCharge ?? 0.0000335) * 100}" step="0.0001"></td>
-            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="exc-fu" value="${(s.futures?.exchangeCharge ?? 0.00002) * 100}" step="0.0001"></td>
-          </tr>
-          <tr><td style="text-align:left;font-weight:500">Stamp Duty (%)</td>
-            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="stm-eq" value="${(s.equity?.stampDuty ?? 0.00015) * 100}" step="0.001"></td>
-            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="stm-in" value="${(s.intraday?.stampDuty ?? 0.00003) * 100}" step="0.001"></td>
-            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="stm-fu" value="${(s.futures?.stampDuty ?? 0.00002) * 100}" step="0.001"></td>
-          </tr>
-          <tr><td style="text-align:left;font-weight:500">SEBI Fee (%)</td>
-            <td colspan="3"><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="sebi-all" value="${(s.equity?.sebiCharge ?? 0.000001) * 100}" step="0.00001"></td>
-          </tr>
-          <tr><td style="text-align:left;font-weight:500">GST (%)</td>
-            <td colspan="3"><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="gst-all" value="${(s.equity?.gst ?? 0.18) * 100}" step="1"></td>
-          </tr>
+          <tr><td>Gov. Charges</td><td class="readonly-cell">Same as above (STT ${(s.intraday?.stt || 0) * 100}% on sell side for intraday)</td><td><span class="badge badge-muted">Auto</span></td></tr>
         </tbody>
       </table>
 
-      <div class="form-section-title">Charge Calculator</div>
+      <div style="margin-top:12px; display:flex; gap:10px">
+        <button class="btn btn-secondary btn-sm" onclick="settingsModule._showChargesModal()">⚙ Edit Govt Charges</button>
+        <button class="btn btn-danger btn-sm" onclick="settingsModule._resetGovtCharges()">↺ Reset Defaults</button>
+      </div>
+
+      <div class="form-section-title" style="margin-top:24px">Charge Calculator</div>
       <div class="form-grid">
         <div class="form-group"><label class="form-label">Trade Type</label>
           <select class="form-select" id="cc-type"><option>Equity</option><option>Intraday</option><option>Futures</option></select>
-        </div>
-        <div class="form-group"><label class="form-label">Exchange</label>
-          <select class="form-select" id="cc-exchange"><option value="NSE">NSE</option><option value="BSE">BSE</option></select>
         </div>
         <div class="form-group"><label class="form-label">Buy Turnover (₹)</label><input class="form-input" type="number" id="cc-buy" placeholder="e.g. 100000"></div>
         <div class="form-group"><label class="form-label">Sell Turnover (₹)</label><input class="form-input" type="number" id="cc-sell" placeholder="e.g. 105000"></div>
@@ -281,13 +282,119 @@ const settingsModule = (() => {
     </div>`;
   }
 
+  async function _toggleExchange(val) {
+    const settings = await db.getSettings();
+    if (!settings.charges) settings.charges = {};
+    settings.charges.exchangePreference = val;
+    
+    const exRate = val === 'BSE' ? 0.0000375 : 0.0000335;
+    if (settings.charges.equity) settings.charges.equity.exchangeCharge = exRate;
+    if (settings.charges.intraday) settings.charges.intraday.exchangeCharge = exRate;
+    if (settings.charges.futures) settings.charges.futures.exchangeCharge = val === 'BSE' ? 0 : 0.00002;
+    
+    await db.saveSettings(settings);
+    await _showPage('charges');
+  }
+
+  async function _resetGovtCharges() {
+    if (!confirm('Reset all government charges to standard NSE/SEBI defaults?')) return;
+    const defaults = db.getDefaultSettings();
+    const settings = await db.getSettings();
+    
+    const eqBr = settings.charges?.equity?.brokerage ?? 0;
+    const inBr = settings.charges?.intraday?.brokerage ?? 20;
+    const fuBr = settings.charges?.futures?.brokerage ?? 20;
+    
+    settings.charges = JSON.parse(JSON.stringify(defaults.charges));
+    settings.charges.equity.brokerage = eqBr;
+    settings.charges.intraday.brokerage = inBr;
+    settings.charges.futures.brokerage = fuBr;
+    
+    await db.saveSettings(settings);
+    app.toast('Government charges reset to defaults.', 'success');
+    await _showPage('charges');
+  }
+
+  async function _showChargesModal() {
+    const settings = await db.getSettings();
+    const s = settings?.charges || {};
+    const content = `<div style="font-size:13px">
+      <div class="alert-banner info" style="margin-bottom:12px">ℹ Enter percentages directly (e.g. 0.1 for 0.1%). Brokerage flat rates can be edited on the main page.</div>
+      <table class="charges-table" style="text-align:center">
+        <thead><tr><th style="text-align:left">Charge Type</th><th>Equity</th><th>Intraday</th><th>Futures</th></tr></thead>
+        <tbody>
+          <tr><td style="text-align:left;font-weight:500">Brokerage (%)</td>
+            <td><span class="badge badge-muted">N/A</span></td>
+            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="m-br-in-pct" value="${(s.intraday?.brokeragePercent ?? 0.0003) * 100}" step="0.001"></td>
+            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="m-br-fu-pct" value="${(s.futures?.brokeragePercent ?? 0.0003) * 100}" step="0.001"></td>
+          </tr>
+          <tr><td style="text-align:left;font-weight:500">STT (%)</td>
+            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="m-stt-eq" value="${(s.equity?.stt ?? 0.001) * 100}" step="0.001"></td>
+            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="m-stt-in" value="${(s.intraday?.stt ?? 0.00025) * 100}" step="0.001"></td>
+            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="m-stt-fu" value="${(s.futures?.stt ?? 0.0002) * 100}" step="0.001"></td>
+          </tr>
+          <tr><td style="text-align:left;font-weight:500">Exchange Txn (%)</td>
+            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="m-exc-eq" value="${(s.equity?.exchangeCharge ?? 0.0000335) * 100}" step="0.0001"></td>
+            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="m-exc-in" value="${(s.intraday?.exchangeCharge ?? 0.0000335) * 100}" step="0.0001"></td>
+            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="m-exc-fu" value="${(s.futures?.exchangeCharge ?? 0.00002) * 100}" step="0.0001"></td>
+          </tr>
+          <tr><td style="text-align:left;font-weight:500">Stamp Duty (%)</td>
+            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="m-stm-eq" value="${(s.equity?.stampDuty ?? 0.00015) * 100}" step="0.001"></td>
+            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="m-stm-in" value="${(s.intraday?.stampDuty ?? 0.00003) * 100}" step="0.001"></td>
+            <td><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="m-stm-fu" value="${(s.futures?.stampDuty ?? 0.00002) * 100}" step="0.001"></td>
+          </tr>
+          <tr><td style="text-align:left;font-weight:500">SEBI Fee (%)</td>
+            <td colspan="3"><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="m-sebi-all" value="${(s.equity?.sebiCharge ?? 0.000001) * 100}" step="0.00001"></td>
+          </tr>
+          <tr><td style="text-align:left;font-weight:500">GST (%)</td>
+            <td colspan="3"><input class="form-input" style="width:70px;text-align:center;margin:auto" type="number" id="m-gst-all" value="${(s.equity?.gst ?? 0.18) * 100}" step="1"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
+    app.openModal('Edit Government Charges', content, [
+      { id: 'cancel', label: 'Cancel', class: 'btn-secondary', onClick: app.closeModal },
+      { id: 'save', label: 'Save Changes', class: 'btn-primary', onClick: async () => {
+        const set = await db.getSettings();
+        if(!set.charges) set.charges = db.getDefaultSettings().charges;
+        
+        const sebi = (parseFloat(document.getElementById('m-sebi-all')?.value) || 0) / 100;
+        const gst  = (parseFloat(document.getElementById('m-gst-all')?.value) || 0) / 100;
+        
+        set.charges.equity.stt = (parseFloat(document.getElementById('m-stt-eq')?.value) || 0) / 100;
+        set.charges.equity.exchangeCharge = (parseFloat(document.getElementById('m-exc-eq')?.value) || 0) / 100;
+        set.charges.equity.stampDuty = (parseFloat(document.getElementById('m-stm-eq')?.value) || 0) / 100;
+        set.charges.equity.sebiCharge = sebi;
+        set.charges.equity.gst = gst;
+
+        set.charges.intraday.brokeragePercent = (parseFloat(document.getElementById('m-br-in-pct')?.value) || 0) / 100;
+        set.charges.intraday.stt = (parseFloat(document.getElementById('m-stt-in')?.value) || 0) / 100;
+        set.charges.intraday.exchangeCharge = (parseFloat(document.getElementById('m-exc-in')?.value) || 0) / 100;
+        set.charges.intraday.stampDuty = (parseFloat(document.getElementById('m-stm-in')?.value) || 0) / 100;
+        set.charges.intraday.sebiCharge = sebi;
+        set.charges.intraday.gst = gst;
+
+        set.charges.futures.brokeragePercent = (parseFloat(document.getElementById('m-br-fu-pct')?.value) || 0) / 100;
+        set.charges.futures.stt = (parseFloat(document.getElementById('m-stt-fu')?.value) || 0) / 100;
+        set.charges.futures.exchangeCharge = (parseFloat(document.getElementById('m-exc-fu')?.value) || 0) / 100;
+        set.charges.futures.stampDuty = (parseFloat(document.getElementById('m-stm-fu')?.value) || 0) / 100;
+        set.charges.futures.sebiCharge = sebi;
+        set.charges.futures.gst = gst;
+        
+        await db.saveSettings(set);
+        app.closeModal();
+        app.toast('Government charges updated.', 'success');
+        await _showPage('charges');
+      }}
+    ]);
+  }
+
   async function _calcCharges() {
     const type = document.getElementById('cc-type')?.value;
-    const exchange = document.getElementById('cc-exchange')?.value || 'NSE';
     const buy = parseFloat(document.getElementById('cc-buy')?.value) || 0;
     const sell = parseFloat(document.getElementById('cc-sell')?.value) || 0;
     const s = await db.getSettings();
-    const breakdown = calc.getZerodhaCharges(type, buy, sell, s, exchange);
+    const breakdown = calc.getZerodhaCharges(type, buy, sell, s, s.charges?.exchangePreference || 'NSE');
     const el = document.getElementById('cc-result');
     if (!el) return;
     el.innerHTML = `<table class="charges-table"><thead><tr><th>Charge</th><th>Amount (₹)</th></tr></thead>
@@ -299,38 +406,15 @@ const settingsModule = (() => {
 
   async function _saveCharges() {
     const settings = await db.getSettings();
-    const sebi = (parseFloat(document.getElementById('sebi-all')?.value) || 0) / 100;
-    const gst  = (parseFloat(document.getElementById('gst-all')?.value) || 0) / 100;
-
-    settings.charges = { 
-      broker: document.getElementById('ch-broker')?.value || 'Zerodha', 
-      equity: { 
-        brokerage: parseFloat(document.getElementById('br-eq-flat')?.value) || 0,
-        stt: (parseFloat(document.getElementById('stt-eq')?.value) || 0) / 100,
-        exchangeCharge: (parseFloat(document.getElementById('exc-eq')?.value) || 0) / 100,
-        stampDuty: (parseFloat(document.getElementById('stm-eq')?.value) || 0) / 100,
-        sebiCharge: sebi, gst: gst
-      }, 
-      intraday: { 
-        brokerage: parseFloat(document.getElementById('br-in-flat')?.value) || 0,
-        brokeragePercent: (parseFloat(document.getElementById('br-in-pct')?.value) || 0) / 100,
-        stt: (parseFloat(document.getElementById('stt-in')?.value) || 0) / 100,
-        exchangeCharge: (parseFloat(document.getElementById('exc-in')?.value) || 0) / 100,
-        stampDuty: (parseFloat(document.getElementById('stm-in')?.value) || 0) / 100,
-        sebiCharge: sebi, gst: gst
-      }, 
-      futures: { 
-        brokerage: parseFloat(document.getElementById('br-fu-flat')?.value) || 0,
-        brokeragePercent: (parseFloat(document.getElementById('br-fu-pct')?.value) || 0) / 100,
-        stt: (parseFloat(document.getElementById('stt-fu')?.value) || 0) / 100,
-        exchangeCharge: (parseFloat(document.getElementById('exc-fu')?.value) || 0) / 100,
-        stampDuty: (parseFloat(document.getElementById('stm-fu')?.value) || 0) / 100,
-        sebiCharge: sebi, gst: gst
-      } 
-    };
+    if (!settings.charges) settings.charges = db.getDefaultSettings().charges;
+    
+    settings.charges.broker = document.getElementById('ch-broker')?.value || 'Zerodha';
+    settings.charges.equity.brokerage = parseFloat(document.getElementById('br-eq-delivery')?.value) || 0;
+    settings.charges.intraday.brokerage = parseFloat(document.getElementById('br-intraday')?.value) || 20;
+    
     await db.saveSettings(settings);
     _hasUnsaved = false;
-    app.toast('Charge settings saved', 'success');
+    app.toast('Brokerage settings saved', 'success');
   }
 
   // ── PAGE: Alerts ───────────────────────────────────────────────────────────
@@ -573,5 +657,5 @@ const settingsModule = (() => {
     await _showPage(_activePage);
   }
 
-  return { init, _goPage, _saveGeneral, _saveTrading, _saveRisk, _saveCharges, _calcCharges, _saveAlerts, _exportData, _importData, _checkUpdates, _verifySystem, _resetApp, _resetPage, _filterFormulas };
+  return { init, _goPage, _saveGeneral, _saveTrading, _saveRisk, _saveCharges, _calcCharges, _saveAlerts, _exportData, _importData, _checkUpdates, _verifySystem, _resetApp, _resetPage, _filterFormulas, _showChargesModal, _resetGovtCharges, _toggleExchange };
 })();
