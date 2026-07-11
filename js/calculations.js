@@ -319,39 +319,45 @@ const calc = (() => {
   }
 
   // ── Zerodha Charge Calculator ──────────────────────────────────────────────
-  function getZerodhaCharges(tradeType, buyTurnover, sellTurnover, settings) {
+  function getZerodhaCharges(tradeType, buyTurnover, sellTurnover, settings, exchange = 'NSE') {
     const cfg = settings?.charges || {};
     let brokerage = 0, stt = 0, exchangeCharge = 0, sebiCharge = 0, gst = 0, stampDuty = 0;
     const totalTurnover = buyTurnover + sellTurnover;
 
+    // BSE standard transaction charge for equity segments
+    const bseRate = 0.0000375;
+
     if (tradeType === 'Equity') {
       const c = cfg.equity || {};
-      brokerage = Number(c.brokerage || 0);
-      stt = totalTurnover * Number(c.stt || 0.001);
-      exchangeCharge = totalTurnover * Number(c.exchangeCharge || 0.0000335);
-      sebiCharge = totalTurnover * Number(c.sebiCharge || 0.000001);
-      gst = (brokerage + exchangeCharge + sebiCharge) * Number(c.gst || 0.18);
-      stampDuty = buyTurnover * Number(c.stampDuty || 0.00015);
+      brokerage = Number(c.brokerage ?? 0);
+      stt = totalTurnover * Number(c.stt ?? 0.001);
+      const exRate = exchange === 'BSE' ? bseRate : Number(c.exchangeCharge ?? 0.0000335);
+      exchangeCharge = totalTurnover * exRate;
+      sebiCharge = totalTurnover * Number(c.sebiCharge ?? 0.000001);
+      gst = (brokerage + exchangeCharge + sebiCharge) * Number(c.gst ?? 0.18);
+      stampDuty = buyTurnover * Number(c.stampDuty ?? 0.00015);
     } else if (tradeType === 'Intraday') {
       const c = cfg.intraday || {};
-      const brokerageFlat = Number(c.brokerage || 20);
-      const brokeragePct = totalTurnover * Number(c.brokeragePercent || 0.0003);
+      const brokerageFlat = Number(c.brokerage ?? 20);
+      const brokeragePct = totalTurnover * Number(c.brokeragePercent ?? 0.0003);
       brokerage = Math.min(brokerageFlat, brokeragePct);
-      stt = sellTurnover * Number(c.stt || 0.00025);
-      exchangeCharge = totalTurnover * Number(c.exchangeCharge || 0.0000335);
-      sebiCharge = totalTurnover * Number(c.sebiCharge || 0.000001);
-      gst = (brokerage + exchangeCharge + sebiCharge) * Number(c.gst || 0.18);
-      stampDuty = buyTurnover * Number(c.stampDuty || 0.00003);
+      stt = sellTurnover * Number(c.stt ?? 0.00025);
+      const exRate = exchange === 'BSE' ? bseRate : Number(c.exchangeCharge ?? 0.0000335);
+      exchangeCharge = totalTurnover * exRate;
+      sebiCharge = totalTurnover * Number(c.sebiCharge ?? 0.000001);
+      gst = (brokerage + exchangeCharge + sebiCharge) * Number(c.gst ?? 0.18);
+      stampDuty = buyTurnover * Number(c.stampDuty ?? 0.00003);
     } else if (tradeType === 'Futures') {
       const c = cfg.futures || {};
-      const brokerageFlat = Number(c.brokerage || 20);
-      const brokeragePct = totalTurnover * Number(c.brokeragePercent || 0.0003);
+      const brokerageFlat = Number(c.brokerage ?? 20);
+      const brokeragePct = totalTurnover * Number(c.brokeragePercent ?? 0.0003);
       brokerage = Math.min(brokerageFlat, brokeragePct);
-      stt = sellTurnover * Number(c.stt || 0.0002);
-      exchangeCharge = totalTurnover * Number(c.exchangeCharge || 0.00002);
-      sebiCharge = totalTurnover * Number(c.sebiCharge || 0.000001);
-      gst = (brokerage + exchangeCharge + sebiCharge) * Number(c.gst || 0.18);
-      stampDuty = buyTurnover * Number(c.stampDuty || 0.00002);
+      stt = sellTurnover * Number(c.stt ?? 0.0002);
+      const exRate = exchange === 'BSE' ? 0 : Number(c.exchangeCharge ?? 0.00002);
+      exchangeCharge = totalTurnover * exRate;
+      sebiCharge = totalTurnover * Number(c.sebiCharge ?? 0.000001);
+      gst = (brokerage + exchangeCharge + sebiCharge) * Number(c.gst ?? 0.18);
+      stampDuty = buyTurnover * Number(c.stampDuty ?? 0.00002);
     }
 
     const total = brokerage + stt + exchangeCharge + sebiCharge + gst + stampDuty;
