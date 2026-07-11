@@ -87,6 +87,12 @@ const analyticsModule = (() => {
         <div class="card"><div class="card-header"><span class="card-title">Drawdown Curve</span></div><div style="padding:12px;height:220px"><canvas id="anl-dd-chart"></canvas></div></div>
       </div>
       <div class="anl-charts-row">
+        <div class="card" style="flex:1">
+          <div class="card-header"><span class="card-title">Trade P&L Sequence</span><span class="card-subtitle">Chronological Profit/Loss per Trade (₹)</span></div>
+          <div style="padding:12px;height:220px"><canvas id="anl-daily-pnl-chart"></canvas></div>
+        </div>
+      </div>
+      <div class="anl-charts-row">
         <div class="card"><div class="card-header"><span class="card-title">Monthly P&L Heatmap</span></div><div style="padding:12px;overflow-x:auto" id="anl-heatmap"></div></div>
         <div class="card"><div class="card-header"><span class="card-title">Rolling 10-Trade Win Rate</span></div><div style="padding:12px;height:220px"><canvas id="anl-rolling-chart"></canvas></div></div>
       </div>
@@ -97,6 +103,16 @@ const analyticsModule = (() => {
     const labels = dailyArr.map(d => d.date.slice(5));
     const cumData = dailyArr.map(d => d.cumPnl);
     _charts.push(_makeLineChart('anl-equity-chart', labels, cumData, 'Cumulative P&L', '#5b6af0'));
+
+    // Trade P&L Sequence Chart
+    const seqSorted = trades.slice().sort((a,b) => {
+      const da = a.finalExit?.date || a.entries?.[0]?.date || '';
+      const db = b.finalExit?.date || b.entries?.[0]?.date || '';
+      return da.localeCompare(db);
+    });
+    const seqLabels = seqSorted.map((t, i) => `${t.symbol}`);
+    const seqData = seqSorted.map(t => calc.getTradeMetrics(t).realizedPnl);
+    _charts.push(_makeBarChart('anl-daily-pnl-chart', seqLabels, seqData, 'Trade P&L'));
 
     // Drawdown curve
     let peak = 0;

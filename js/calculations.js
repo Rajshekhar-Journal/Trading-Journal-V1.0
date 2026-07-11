@@ -284,6 +284,15 @@ const calc = (() => {
 
   // ── Date Filtering ─────────────────────────────────────────────────────────
   function filterByDateRange(trades, range, customStart, customEnd) {
+    if (range === 'Last 20') {
+      const sorted = trades.slice().sort((a,b) => {
+        const da = a.finalExit?.date || a.entries?.[0]?.date || '';
+        const db = b.finalExit?.date || b.entries?.[0]?.date || '';
+        return da.localeCompare(db);
+      });
+      return sorted.slice(-20);
+    }
+
     const now = new Date();
     let startDate;
     let endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
