@@ -259,19 +259,24 @@ const db = (() => {
   async function savePlaybook(pb) {
     const uid = _uid();
     const { error } = await _sb().from('playbooks').upsert({
-      id:              pb.id || _generateId('pb'),
-      user_id:         uid,
-      name:            pb.name,
-      version:         pb.version || '1.0',
-      status:          pb.status || 'Draft',
-      category:        pb.category || null,
-      description:     pb.description || null,
-      entry_rules:     pb.entryRules     || pb.entry_rules     || [],
-      exit_rules:      pb.exitRules      || pb.exit_rules      || [],
-      risk_rules:      pb.riskRules      || pb.risk_rules      || [],
-      checklist:       pb.checklist      || [],
-      version_history: pb.versionHistory || pb.version_history || [],
-      updated_at:      new Date().toISOString(),
+      id:                  pb.id || _generateId('pb'),
+      user_id:             uid,
+      name:                pb.name,
+      version:             pb.version || '1.0',
+      status:              pb.status  || 'Draft',
+      category:            pb.category            || null,
+      description:         pb.description         || null,
+      objective:           pb.objective           || null,
+      market_type:         pb.marketType          || null,
+      suitable_trend:      pb.suitableTrend       || null,
+      risk_category:       pb.riskCategory        || null,
+      ideal_holding_period: pb.idealHoldingPeriod || null,
+      entry_rules:         pb.entryRules     || pb.entry_rules     || [],
+      exit_rules:          pb.exitRules      || pb.exit_rules      || [],
+      risk_rules:          pb.riskRules      || pb.risk_rules      || [],
+      checklist:           pb.checklist      || [],
+      version_history:     pb.versionHistory || pb.version_history || [],
+      updated_at:          new Date().toISOString(),
     }, { onConflict: 'id' });
     if (error) { console.error('savePlaybook:', error); return; }
     _notifyChange('playbooks');

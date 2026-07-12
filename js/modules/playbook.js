@@ -130,34 +130,35 @@ const playbookModule = (() => {
         panel.querySelectorAll('.detail-tab-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         const tc = document.getElementById('pb-dtab-content');
+        // Re-fetch fresh data; in flat Supabase schema, pb IS the version
         const p = await db.getPlaybookById(pbId);
-        const v = p.versions?.find(vx => vx.version === p.currentVersion) || p.versions?.[0] || {};
-        if (!tc) return;
+        if (!tc || !p) return;
         const tab = btn.dataset.dtab;
-        if (tab === 'info') tc.innerHTML = _tabInfo(p, v, pbId);
-        else if (tab === 'entry') tc.innerHTML = _tabEntryRules(p, v, pbId);
-        else if (tab === 'exit') tc.innerHTML = _tabExitRules(p, v, pbId);
-        else if (tab === 'risk') tc.innerHTML = _tabRiskRules(p, v, pbId);
-        else if (tab === 'checklist') tc.innerHTML = _tabChecklist(p, v, pbId);
-        else if (tab === 'trades') tc.innerHTML = await _tabLinkedTrades(p);
+        if (tab === 'info')          tc.innerHTML = _tabInfo(p, p, pbId);
+        else if (tab === 'entry')    tc.innerHTML = _tabEntryRules(p, p, pbId);
+        else if (tab === 'exit')     tc.innerHTML = _tabExitRules(p, p, pbId);
+        else if (tab === 'risk')     tc.innerHTML = _tabRiskRules(p, p, pbId);
+        else if (tab === 'checklist') tc.innerHTML = _tabChecklist(p, p, pbId);
+        else if (tab === 'trades')   tc.innerHTML = await _tabLinkedTrades(p);
         else if (tab === 'analytics') tc.innerHTML = await _tabAnalytics(p);
-        else if (tab === 'history') tc.innerHTML = _tabVersionHistory(p);
+        else if (tab === 'history')  tc.innerHTML = _tabVersionHistory(p);
       });
     });
   }
 
   function _tabInfo(pb, ver, pbId) {
+    // ver === pb in flat schema; read directly from pb fields
     return `<div>
-      <div class="form-group"><label class="form-label">Objective</label><textarea class="form-input form-textarea" id="pb-objective" rows="2">${ver.objective || ''}</textarea></div>
+      <div class="form-group"><label class="form-label">Objective</label><textarea class="form-input form-textarea" id="pb-objective" rows="2">${pb.objective || ''}</textarea></div>
       <div class="form-grid">
-        <div class="form-group"><label class="form-label">Market Type</label><input class="form-input" id="pb-mkttype" value="${ver.marketType || ''}"></div>
-        <div class="form-group"><label class="form-label">Suitable Trend</label><input class="form-input" id="pb-trend" value="${ver.suitableTrend || ''}"></div>
+        <div class="form-group"><label class="form-label">Market Type</label><input class="form-input" id="pb-mkttype" value="${pb.marketType || ''}"></div>
+        <div class="form-group"><label class="form-label">Suitable Trend</label><input class="form-input" id="pb-trend" value="${pb.suitableTrend || ''}"></div>
         <div class="form-group"><label class="form-label">Risk Category</label><select class="form-select" id="pb-riskcat">
-          ${['Low','Low-Medium','Medium','High'].map(r => `<option ${ver.riskCategory === r ? 'selected' : ''}>${r}</option>`).join('')}
+          ${['Low','Low-Medium','Medium','High'].map(r => `<option ${pb.riskCategory === r ? 'selected' : ''}>${r}</option>`).join('')}
         </select></div>
-        <div class="form-group"><label class="form-label">Ideal Holding Period</label><input class="form-input" id="pb-holding" value="${ver.idealHoldingPeriod || ''}"></div>
+        <div class="form-group"><label class="form-label">Ideal Holding Period</label><input class="form-input" id="pb-holding" value="${pb.idealHoldingPeriod || ''}"></div>
       </div>
-      <div class="form-group"><label class="form-label">Description</label><textarea class="form-input form-textarea" id="pb-desc" rows="3">${ver.description || ''}</textarea></div>
+      <div class="form-group"><label class="form-label">Description</label><textarea class="form-input form-textarea" id="pb-desc" rows="3">${pb.description || ''}</textarea></div>
       <div class="settings-save-bar"><button class="btn btn-secondary btn-sm" onclick="playbookModule._saveInfo('${pbId}')">Save Changes</button></div>
     </div>`;
   }
@@ -165,14 +166,13 @@ const playbookModule = (() => {
   async function _saveInfo(pbId) {
     const pb = await db.getPlaybookById(pbId);
     if (!pb) return;
-    const verIdx = pb.versions.findIndex(v => v.version === pb.currentVersion);
-    if (verIdx < 0) return;
-    pb.versions[verIdx].objective = document.getElementById('pb-objective')?.value || '';
-    pb.versions[verIdx].description = document.getElementById('pb-desc')?.value || '';
-    pb.versions[verIdx].marketType = document.getElementById('pb-mkttype')?.value || '';
-    pb.versions[verIdx].suitableTrend = document.getElementById('pb-trend')?.value || '';
-    pb.versions[verIdx].riskCategory = document.getElementById('pb-riskcat')?.value || '';
-    pb.versions[verIdx].idealHoldingPeriod = document.getElementById('pb-holding')?.value || '';
+    // Flat Supabase schema — write directly to pb fields
+    pb.objective          = document.getElementById('pb-objective')?.value  || '';
+    pb.description        = document.getElementById('pb-desc')?.value       || '';
+    pb.marketType         = document.getElementById('pb-mkttype')?.value    || '';
+    pb.suitableTrend      = document.getElementById('pb-trend')?.value      || '';
+    pb.riskCategory       = document.getElementById('pb-riskcat')?.value    || '';
+    pb.idealHoldingPeriod = document.getElementById('pb-holding')?.value    || '';
     await db.savePlaybook(pb);
     app.toast('Playbook saved', 'success');
   }
