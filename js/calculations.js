@@ -74,16 +74,15 @@ const calc = (() => {
     const rptToUse = initialRPT;
     const currentRiskR = rptToUse !== 0 ? currentRisk / rptToUse : 0;
 
-    // Net Realized P&L
+    // Net Realized P&L = (AvgExit − AvgEntry) × SoldQty − TotalCharges
+    // TotalCharges always deducted (buy charges are a cost even before any exit)
     let realizedPnl = 0;
-    if (totalSellQty > 0) {
-      if (trade.direction === 'Long') {
-        realizedPnl = (avgExitPrice - avgEntryPrice) * totalSellQty;
-      } else {
-        realizedPnl = (avgEntryPrice - avgExitPrice) * totalSellQty;
-      }
-      realizedPnl -= totalCharges;
+    if (trade.direction === 'Long') {
+      realizedPnl = (avgExitPrice - avgEntryPrice) * totalSellQty;
+    } else {
+      realizedPnl = (avgEntryPrice - avgExitPrice) * totalSellQty;
     }
+    realizedPnl -= totalCharges;
 
     // Unrealized P&L (needs CMP — passed separately)
     // We compute it outside when CMP is known

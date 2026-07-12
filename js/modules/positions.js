@@ -95,8 +95,9 @@ const positionsModule = (() => {
       const riskRCls  = m.currentRiskR <= -1.5 ? 'text-danger' : m.currentRiskR <= -0.5 ? 'text-warning' : 'text-success';
       const chgCls    = chgPct >= 0 ? 'text-success' : 'text-danger';
       const netPnl    = m.realizedPnl || 0;  // = (AvgSell - AvgEntry) × SellQty − Charges
+      const symColor  = cmp >= m.avgEntryPrice ? 'text-success' : 'text-danger';
       return `<tr data-id="${trade.id}" onclick="positionsModule._onRowClick('${trade.id}')">
-        <td><strong>${trade.symbol}</strong> <span class="badge badge-muted" style="font-size:10px">${trade.direction}</span></td>
+        <td><strong class="${symColor}">${trade.symbol}</strong> <span class="badge badge-muted" style="font-size:10px">${trade.direction}</span></td>
         <td><span class="badge badge-muted">${trade.tradeType}</span></td>
         <td>${calc.formatDate(trade.entries?.[0]?.date || '')}</td>
         <td class="font-mono">${m.openQty}</td>
@@ -174,6 +175,7 @@ const positionsModule = (() => {
               <div class="metric-label">CMP <span style="color:#5b6af0;font-size:10px;cursor:pointer" onclick="positionsModule._showCmpModal('${tradeId}')">✎ Update</span></div>
               <div class="metric-value">₹${calc.formatNumber(cmp)}</div>
             </div>
+            ${m.avgExitPrice > 0 ? `<div class="metric-item"><div class="metric-label">Avg Exit</div><div class="metric-value">₹${calc.formatNumber(m.avgExitPrice)} <span style="font-size:11px;color:${m.avgExitPrice >= m.avgEntryPrice ? 'var(--positive)':'var(--negative)'}">(${((m.avgExitPrice-m.avgEntryPrice)/m.avgEntryPrice*100).toFixed(2)}%)</span></div></div>` : ''}
             <div class="metric-item"><div class="metric-label">Initial Stop</div><div class="metric-value">₹${calc.formatNumber(trade.initialStop)}</div></div>
             <div class="metric-item"><div class="metric-label">Current Stop</div><div class="metric-value">₹${calc.formatNumber(m.currentStop)}</div></div>
             <div class="metric-item"><div class="metric-label">Open Qty</div><div class="metric-value">${m.openQty}</div></div>
@@ -181,7 +183,7 @@ const positionsModule = (() => {
             <div class="metric-item"><div class="metric-label">RPT</div><div class="metric-value">₹${calc.formatNumber(m.initialRPT)}</div></div>
             <div class="metric-item"><div class="metric-label">Open Risk R</div><div class="metric-value ${m.currentRiskR <= -1 ? 'negative' : ''}">${calc.formatR(m.currentRiskR)}</div></div>
             <div class="metric-item"><div class="metric-label">Unreal. P&L</div><div class="metric-value ${unrealPnl >= 0 ? 'positive' : 'negative'}">${calc.formatCurrency(unrealPnl)} <span style="font-size:11px">(${unrealR >= 0 ? '+' : ''}${unrealR.toFixed(2)}R)</span></div></div>
-            <div class="metric-item"><div class="metric-label">Realized P&L</div><div class="metric-value ${m.realizedPnl >= 0 ? 'positive' : m.realizedPnl < 0 ? 'negative' : ''}">${calc.formatCurrency(m.realizedPnl || 0)}</div></div>
+            <div class="metric-item"><div class="metric-label">Realized P&L</div><div class="metric-value ${m.realizedPnl >= 0 ? 'positive' : m.realizedPnl < 0 ? 'negative' : ''}">${calc.formatCurrency(m.realizedPnl || 0)} <span style="font-size:11px">(${calc.formatR(m.profitR)})</span></div></div>
           </div>
 
           <div class="quick-actions">
@@ -235,33 +237,71 @@ const positionsModule = (() => {
 
   // ── Lifecycle Tab with Edit/Delete ─────────────────────────────────────────
   function _renderLifecycleTab(trade) {
+    const m   = calc.getTradeMetrics(trade);
     const rows = [];
-    (trade.entries     || []).forEach(e => rows.push({ type:'Entry',        id:e.id, date:e.date, price:e.price, qty:e.qty, charges:e.charges||0, note:e.notes||'' }));
-    (trade.pyramids    || []).forEach(p => rows.push({ type:'Pyramid',      id:p.id, date:p.date, price:p.price, qty:p.qty, charges:p.charges||0, note:p.notes||'' }));
-    (trade.partialExits|| []).forEach(p => rows.push({ type:'Partial Exit', id:p.id, date:p.date, price:p.price, qty:p.qty, charges:p.charges||0, note:p.notes||'' }));
-    if (trade.finalExit) rows.push({ type:'Final Exit', id:trade.finalExit.id||'fe', date:trade.finalExit.date, price:trade.finalExit.price, qty:trade.finalExit.qty, charges:trade.finalExit.charges||0, note:'' });
-    rows.sort((a,b) => (a.date||'').localeCompare(b.date||''));
-    if (!rows.length) return `<div class="no-data">No transactions recorded.</div>`;
 
-    // Running realized P&L calculation
-    const m = calc.getTradeMetrics(trade);
+    // Track running avg entry for per-row profit calculation
+    let runCost = 0, runQty = 0;
 
-    return `<table class="data-table">
-      <thead><tr><th>Type</th><th>Date</th><th>Price</th><th>Qty</th><th>Charges</th><th style="width:70px">Actions</th></tr></thead>
-      <tbody>${rows.map(r => `<tr>
-        <td><span class="badge ${r.type.includes('Exit') ? 'badge-danger' : r.type === 'Pyramid' ? 'badge-success' : 'badge-primary'}">${r.type}</span></td>
+    // Build rows with extra computed fields
+    const allBuys = [
+      ...(trade.entries  || []).map(e => ({ ...e, rowType:'Entry' })),
+      ...(trade.pyramids || []).map(p => ({ ...p, rowType:'Pyramid' })),
+    ].sort((a,b) => (a.date||'').localeCompare(b.date||''));
+
+    const allSells = [
+      ...(trade.partialExits || []).map(p => ({ ...p, rowType:'Partial Exit' })),
+      ...(trade.finalExit ? [{ ...trade.finalExit, id: trade.finalExit.id||'fe', rowType:'Final Exit' }] : []),
+    ].sort((a,b) => (a.date||'').localeCompare(b.date||''));
+
+    // Combine all into one sorted list
+    const allRows = [
+      ...allBuys.map(r => ({ ...r, isBuy: true  })),
+      ...allSells.map(r => ({ ...r, isBuy: false })),
+    ].sort((a,b) => (a.date||'').localeCompare(b.date||''));
+
+    for (const r of allRows) {
+      let profit = 0, rMult = 0;
+      if (r.isBuy) {
+        runCost += Number(r.price) * Number(r.qty);
+        runQty  += Number(r.qty);
+      } else {
+        const avgEntry = runQty > 0 ? runCost / runQty : m.avgEntryPrice;
+        const grossP   = trade.direction === 'Long'
+          ? (Number(r.price) - avgEntry) * Number(r.qty)
+          : (avgEntry - Number(r.price)) * Number(r.qty);
+        profit = grossP;
+        const riskPerShare = avgEntry - Number(trade.initialStop || 0);
+        rMult  = riskPerShare !== 0 ? (Number(r.price) - avgEntry) / Math.abs(riskPerShare) : 0;
+      }
+
+      const typeBadge = r.rowType.includes('Exit') ? 'badge-danger' : r.rowType === 'Pyramid' ? 'badge-success' : 'badge-primary';
+      const profitCls = profit > 0 ? 'text-success' : profit < 0 ? 'text-danger' : '';
+      const rMultCls  = rMult  > 0 ? 'text-success' : rMult  < 0 ? 'text-danger' : '';
+
+      rows.push(`<tr>
+        <td><span class="badge ${typeBadge}">${r.rowType}</span></td>
         <td>${calc.formatDate(r.date)}</td>
         <td class="font-mono">₹${calc.formatNumber(r.price)}</td>
         <td>${r.qty}</td>
-        <td class="font-mono">₹${calc.formatNumber(r.charges)}</td>
+        <td class="font-mono">₹${calc.formatNumber(r.charges||0)}</td>
+        <td class="font-mono ${profitCls}">${r.isBuy ? '—' : calc.formatCurrency(profit)}</td>
+        <td class="font-mono ${rMultCls}">${r.isBuy ? '—' : rMult.toFixed(2)+'R'}</td>
         <td>
-          <button class="btn btn-secondary btn-xs" title="Edit" onclick="positionsModule._editLifecycleRow('${trade.id}','${r.type}','${r.id}')">✏</button>
-          <button class="btn btn-danger btn-xs" title="Delete" onclick="positionsModule._deleteLifecycleRow('${trade.id}','${r.type}','${r.id}')">🗑</button>
+          <button class="btn btn-secondary btn-xs" title="Edit" onclick="positionsModule._editLifecycleRow('${trade.id}','${r.rowType}','${r.id}')">✏</button>
+          <button class="btn btn-danger btn-xs" title="Delete" onclick="positionsModule._deleteLifecycleRow('${trade.id}','${r.rowType}','${r.id}')">🗑</button>
         </td>
-      </tr>`).join('')}</tbody>
+      </tr>`);
+    }
+
+    if (!rows.length) return `<div class="no-data">No transactions recorded.</div>`;
+
+    return `<table class="data-table">
+      <thead><tr><th>Type</th><th>Date</th><th>Price</th><th>Qty</th><th>Charges</th><th>Profit</th><th>R Multiple</th><th style="width:70px">Actions</th></tr></thead>
+      <tbody>${rows.join('')}</tbody>
       <tfoot><tr>
-        <td colspan="4" style="font-size:12px;color:var(--text-muted)">Realized P&L (partial exits)</td>
-        <td colspan="2" class="font-mono fw-600 ${m.realizedPnl >= 0 ? 'text-success' : 'text-danger'}">${calc.formatCurrency(m.realizedPnl||0)} (${calc.formatR(m.profitR||0)})</td>
+        <td colspan="5" style="font-size:12px;color:var(--text-muted)">Net Realized P&amp;L (incl. all charges)</td>
+        <td colspan="3" class="font-mono fw-600 ${m.realizedPnl >= 0 ? 'text-success' : 'text-danger'}">${calc.formatCurrency(m.realizedPnl||0)} (${calc.formatR(m.profitR||0)})</td>
       </tr></tfoot>
     </table>`;
   }
