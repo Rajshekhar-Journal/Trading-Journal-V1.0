@@ -219,19 +219,15 @@ const positionsModule = (() => {
       });
     });
 
-    // Restore fullscreen button state if we are currently in fullscreen
+    // Restore fullscreen state if we are currently in fullscreen (panel HTML was just rebuilt)
     if (_isFullscreen) {
-      const fsBtn = document.getElementById('pos-fs-btn');
+      const fsBtn      = document.getElementById('pos-fs-btn');
       const tablePanel = document.getElementById('pos-table-panel');
       const splitView  = document.getElementById('pos-split-view');
-      // Re-apply fullscreen styles (panel HTML was just rebuilt)
-      tablePanel?.classList.add('hidden');
-      panel.setAttribute('style', 'flex:1;min-width:0;');
-      if (splitView) splitView.style.height = 'calc(100vh - 200px)';
-      if (fsBtn) {
-        fsBtn.textContent = '\u229F'; // ⊟
-        fsBtn.title = 'Minimize — return to split view';
-      }
+      if (tablePanel) tablePanel.style.display = 'none';  // forceful hide
+      panel.style.cssText = 'flex:1;min-width:0;width:100%;';
+      if (splitView)  splitView.style.cssText  = 'height:calc(100vh - 200px);';
+      if (fsBtn)      { fsBtn.textContent = '\u229F'; fsBtn.title = 'Minimize — return to split view'; }
     }
   }
 
@@ -461,20 +457,16 @@ const positionsModule = (() => {
 
   // ── Close Panel — hides detail, restores table-only view ──────────────────
   function _closePanel() {
-    // If in fullscreen, first exit fullscreen cleanly
+    // Exit fullscreen cleanly before closing
     if (_isFullscreen) {
       _isFullscreen = false;
-      document.getElementById('pos-table-panel')?.classList.remove('hidden');
+      const tablePanel = document.getElementById('pos-table-panel');
+      if (tablePanel) tablePanel.style.display = '';
     }
-    // Hide the detail panel
-    document.getElementById('pos-detail-panel')?.classList.add('hidden');
-    // Reset any inline styles set by fullscreen
+    const panel     = document.getElementById('pos-detail-panel');
     const splitView = document.getElementById('pos-split-view');
-    if (splitView) {
-      splitView.removeAttribute('style');
-      splitView.querySelector('.split-left')?.removeAttribute('style');
-      splitView.querySelector('.split-right')?.removeAttribute('style');
-    }
+    if (panel)     { panel.classList.add('hidden'); panel.style.cssText = ''; }
+    if (splitView) { splitView.style.cssText = ''; splitView.querySelector('.split-left')?.removeAttribute('style'); splitView.querySelector('.split-right')?.removeAttribute('style'); }
     _selectedTradeId = null;
     document.querySelectorAll('#pos-table-body tr').forEach(r => r.classList.remove('selected'));
   }
@@ -490,25 +482,17 @@ const positionsModule = (() => {
     const fsBtn      = document.getElementById('pos-fs-btn');
 
     if (_isFullscreen) {
-      // Enter fullscreen: hide table, expand detail to 100%
-      tablePanel?.classList.add('hidden');
-      detPanel?.setAttribute('style', 'flex:1;min-width:0;');
-      if (splitView) splitView.style.height = 'calc(100vh - 200px)';
-      // Change button to Minimize
-      if (fsBtn) {
-        fsBtn.textContent = '⊡';
-        fsBtn.title = 'Minimize — return to split view';
-      }
+      // Enter fullscreen: force-hide table, expand detail to fill full width
+      if (tablePanel) tablePanel.style.display = 'none';
+      if (detPanel)   detPanel.style.cssText = 'flex:1;min-width:0;width:100%;';
+      if (splitView)  splitView.style.cssText = 'height:calc(100vh - 200px);';
+      if (fsBtn)      { fsBtn.textContent = '\u229F'; fsBtn.title = 'Minimize — return to split view'; }
     } else {
       // Exit fullscreen: restore split view
-      tablePanel?.classList.remove('hidden');
-      detPanel?.removeAttribute('style');
-      if (splitView) splitView.removeAttribute('style');
-      // Change button back to Fullscreen
-      if (fsBtn) {
-        fsBtn.textContent = '⛶';
-        fsBtn.title = 'Full Screen — hides position table';
-      }
+      if (tablePanel) tablePanel.style.display = '';
+      if (detPanel)   detPanel.style.cssText = '';
+      if (splitView)  { splitView.style.cssText = ''; splitView.querySelector('.split-left')?.removeAttribute('style'); splitView.querySelector('.split-right')?.removeAttribute('style'); }
+      if (fsBtn)      { fsBtn.textContent = '\u26F6'; fsBtn.title = 'Full Screen — hides position table'; }
     }
   }
 

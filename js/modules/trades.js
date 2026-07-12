@@ -466,29 +466,31 @@ const tradesModule = (() => {
     const fsBtn      = detPanel?.querySelector('.btn-secondary[onclick*="_toggleFullscreen"]');
 
     if (_isFullscreen) {
-      // Enter fullscreen: hide table, expand detail
-      tablePanel?.classList.add('hidden');
-      if (detPanel) detPanel.style.cssText = 'flex:1;min-width:0;';
-      if (splitView) splitView.style.height = 'calc(100vh - 200px)';
-      if (fsBtn) { fsBtn.textContent = '\u229F'; fsBtn.title = 'Minimize — return to split view'; }
+      // Enter fullscreen: force-hide table, expand detail to full width
+      if (tablePanel) tablePanel.style.display = 'none';
+      if (detPanel)   detPanel.style.cssText = 'flex:1;min-width:0;width:100%;';
+      if (splitView)  splitView.style.cssText = 'height:calc(100vh - 200px);';
+      if (fsBtn)      { fsBtn.textContent = '\u229F'; fsBtn.title = 'Minimize — return to split view'; }
     } else {
       // Exit fullscreen: restore split view
-      tablePanel?.classList.remove('hidden');
-      if (detPanel) detPanel.removeAttribute('style');
-      if (splitView) splitView.removeAttribute('style');
-      if (fsBtn) { fsBtn.textContent = '\u26F6'; fsBtn.title = 'Toggle fullscreen'; }
+      if (tablePanel) tablePanel.style.display = '';
+      if (detPanel)   detPanel.style.cssText = '';
+      if (splitView)  { splitView.style.cssText = ''; splitView.querySelector('.split-left')?.removeAttribute('style'); splitView.querySelector('.split-right')?.removeAttribute('style'); }
+      if (fsBtn)      { fsBtn.textContent = '\u26F6'; fsBtn.title = 'Toggle fullscreen'; }
     }
   }
 
   function _closePanel() {
-    document.getElementById('trades-detail-panel')?.classList.add('hidden');
-    const splitView = document.getElementById('trades-split-view');
-    if (splitView) {
-      splitView.querySelector('.split-left')?.setAttribute('style','');
-      splitView.querySelector('.split-right')?.setAttribute('style','');
+    if (_isFullscreen) {
+      _isFullscreen = false;
+      const tablePanel = document.getElementById('trades-table-panel');
+      if (tablePanel) tablePanel.style.display = '';
     }
-    _selectedId   = null;
-    _isFullscreen = false;
+    const panel     = document.getElementById('trades-detail-panel');
+    const splitView = document.getElementById('trades-split-view');
+    if (panel)     { panel.classList.add('hidden'); panel.style.cssText = ''; }
+    if (splitView) { splitView.style.cssText = ''; splitView.querySelector('.split-left')?.removeAttribute('style'); splitView.querySelector('.split-right')?.removeAttribute('style'); }
+    _selectedId = null;
   }
 
   return { init, _onRowClick, _closePanel, _toggleFullscreen, _addNote, _deleteLifecycleRow, _editLifecycleRow };
