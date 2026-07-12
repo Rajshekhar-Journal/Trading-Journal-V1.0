@@ -451,6 +451,13 @@ const settingsModule = (() => {
           </tr>`;
         }).join('')}</tbody>
       </table>
+
+      <div class="settings-section-header" style="margin-top:24px">Market Holidays</div>
+      <div class="alert-banner info" style="margin-bottom:14px">ℹ Enter comma-separated dates (DD-MM-YYYY) for holidays. These are skipped when calculating trading days (e.g. for Day-5 exit).</div>
+      <div class="form-group">
+        <input class="form-input" type="text" id="al-holidays" value="${settings.marketHolidays || ''}" placeholder="e.g. 26-01-2026, 15-08-2026, 02-10-2026">
+      </div>
+
       ${_saveBtn('saveAlerts')}
     </div>`;
   }
@@ -462,9 +469,11 @@ const settingsModule = (() => {
     ALERT_IDS.forEach(id => {
       settings.alerts[id] = { enabled: document.getElementById(`al-${id}-on`)?.checked ?? true, severity: document.getElementById(`al-${id}-sev`)?.value || 'Warning', dashboard: document.getElementById(`al-${id}-dash`)?.checked ?? true, popup: document.getElementById(`al-${id}-pop`)?.checked ?? true };
     });
+    settings.marketHolidays = document.getElementById('al-holidays')?.value || '';
+    
     await db.saveSettings(settings);
     _hasUnsaved = false;
-    app.toast('Alert settings saved', 'success');
+    app.toast('Alert settings & holidays saved', 'success');
   }
 
   // ── PAGE: Data Management ──────────────────────────────────────────────────

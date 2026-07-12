@@ -438,6 +438,40 @@ const calc = (() => {
     });
   }
 
+  function getTradingDays(startDateStr, endDateStr, holidaysStr = '') {
+    if (!startDateStr || !endDateStr) return 0;
+    
+    const holidays = new Set();
+    if (holidaysStr) {
+      holidaysStr.split(',').forEach(d => {
+        const parts = d.trim().split('-');
+        if (parts.length === 3) {
+          // Expecting DD-MM-YYYY, convert to YYYY-MM-DD
+          holidays.add(`${parts[2]}-${parts[1]}-${parts[0]}`);
+        }
+      });
+    }
+
+    const start = new Date(startDateStr);
+    start.setHours(0,0,0,0);
+    const end = new Date(endDateStr);
+    end.setHours(0,0,0,0);
+
+    let count = 0;
+    const cur = new Date(start);
+    while (cur < end) {
+      cur.setDate(cur.getDate() + 1);
+      const dayOfWeek = cur.getDay(); // 0 is Sunday, 6 is Saturday
+      if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+        const dateStr = `${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`;
+        if (!holidays.has(dateStr)) {
+          count++;
+        }
+      }
+    }
+    return count;
+  }
+
   return {
     getTradeMetrics, getUnrealizedPnl,
     getPortfolioHeat,
@@ -449,6 +483,6 @@ const calc = (() => {
     getZerodhaCharges,
     isBreakEven, getTradeResult,
     formatCurrency, formatR, formatDate, formatNumber,
-    getHoldingDays, getCAGR
+    getHoldingDays, getTradingDays, getCAGR
   };
 })();

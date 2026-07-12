@@ -29,7 +29,11 @@ const alertEngine = (() => {
 
       // Day-5 Exit Due
       if (alertConfig.day5Exit?.enabled !== false) {
-        _upsertAlert(alerts, ALERT_TYPES.DAY5_EXIT, holdingDays >= 5, dirty);
+        const todayStr = new Date().toISOString().split('T')[0];
+        const entryDate = trade.entries?.[0]?.date || todayStr;
+        const holidays = settings.marketHolidays || '';
+        const tradingDays = calc.getTradingDays(entryDate, todayStr, holidays);
+        _upsertAlert(alerts, ALERT_TYPES.DAY5_EXIT, tradingDays >= 5, dirty);
       }
 
       // Stop Loss Breach
