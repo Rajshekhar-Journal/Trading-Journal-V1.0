@@ -264,6 +264,16 @@ const tradesModule = (() => {
       });
     });
     _setupOverviewTab(trade, tradeId);
+
+    // Re-apply fullscreen state if currently in fullscreen (panel HTML was just rebuilt)
+    if (_isFullscreen) {
+      const splitView  = document.getElementById('trades-split-view');
+      const tablePanel = document.getElementById('trades-table-panel');
+      const detPanel   = document.getElementById('trades-detail-panel');
+      tablePanel?.classList.add('hidden');
+      if (detPanel) detPanel.style.cssText = 'flex:1;min-width:0;';
+      if (splitView) splitView.style.height = 'calc(100vh - 200px)';
+    }
   }
 
   function _tabOverview(trade, m, pb) {
@@ -453,14 +463,20 @@ const tradesModule = (() => {
     const splitView  = document.getElementById('trades-split-view');
     const tablePanel = document.getElementById('trades-table-panel');
     const detPanel   = document.getElementById('trades-detail-panel');
+    const fsBtn      = detPanel?.querySelector('.btn-secondary[onclick*="_toggleFullscreen"]');
+
     if (_isFullscreen) {
+      // Enter fullscreen: hide table, expand detail
       tablePanel?.classList.add('hidden');
-      detPanel?.setAttribute('style','flex:1;width:100%');
-      splitView?.setAttribute('style','flex-direction:column');
+      if (detPanel) detPanel.style.cssText = 'flex:1;min-width:0;';
+      if (splitView) splitView.style.height = 'calc(100vh - 200px)';
+      if (fsBtn) { fsBtn.textContent = '\u229F'; fsBtn.title = 'Minimize — return to split view'; }
     } else {
+      // Exit fullscreen: restore split view
       tablePanel?.classList.remove('hidden');
-      detPanel?.setAttribute('style','flex:1');
-      splitView?.setAttribute('style','');
+      if (detPanel) detPanel.removeAttribute('style');
+      if (splitView) splitView.removeAttribute('style');
+      if (fsBtn) { fsBtn.textContent = '\u26F6'; fsBtn.title = 'Toggle fullscreen'; }
     }
   }
 
