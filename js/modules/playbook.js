@@ -190,9 +190,8 @@ const playbookModule = (() => {
     const rule = input?.value.trim();
     if (!rule) return;
     const pb = await db.getPlaybookById(pbId);
-    const vi = pb.versions.findIndex(v => v.version === pb.currentVersion);
-    if (vi < 0) return;
-    pb.versions[vi].entryRules = [...(pb.versions[vi].entryRules || []), rule];
+    if (!pb) return;
+    pb.entryRules = [...(pb.entryRules || []), rule];
     await db.savePlaybook(pb);
     app.toast('Rule added', 'success');
     document.querySelector('.detail-tab-btn[data-dtab="entry"]')?.click();
@@ -200,9 +199,8 @@ const playbookModule = (() => {
 
   async function _deleteEntryRule(pbId, idx) {
     const pb = await db.getPlaybookById(pbId);
-    const vi = pb.versions.findIndex(v => v.version === pb.currentVersion);
-    if (vi < 0) return;
-    pb.versions[vi].entryRules.splice(idx, 1);
+    if (!pb) return;
+    pb.entryRules = (pb.entryRules || []).filter((_, i) => i !== idx);
     await db.savePlaybook(pb);
     document.querySelector('.detail-tab-btn[data-dtab="entry"]')?.click();
   }
@@ -227,9 +225,12 @@ const playbookModule = (() => {
 
   async function _saveExitRules(pbId) {
     const pb = await db.getPlaybookById(pbId);
-    const vi = pb.versions.findIndex(v => v.version === pb.currentVersion);
-    if (vi < 0) return;
-    pb.versions[vi].exitRules = { ...pb.versions[vi].exitRules, day5Rule: document.getElementById('er-day5')?.checked, atrExtension: document.getElementById('er-atr')?.checked, ema20Exit: document.getElementById('er-ema')?.checked };
+    if (!pb) return;
+    pb.exitRules = { ...(pb.exitRules || {}),
+      day5Rule:     document.getElementById('er-day5')?.checked,
+      atrExtension: document.getElementById('er-atr')?.checked,
+      ema20Exit:    document.getElementById('er-ema')?.checked,
+    };
     await db.savePlaybook(pb);
   }
 
@@ -245,9 +246,12 @@ const playbookModule = (() => {
 
   async function _saveRiskRules(pbId) {
     const pb = await db.getPlaybookById(pbId);
-    const vi = pb.versions.findIndex(v => v.version === pb.currentVersion);
-    if (vi < 0) return;
-    pb.versions[vi].riskRules = { maxInitialRisk: parseFloat(document.getElementById('rr-maxrisk')?.value) || 1, maxPyramid: parseInt(document.getElementById('rr-maxpyr')?.value) || 1, portfolioHeatGuideline: parseFloat(document.getElementById('rr-heat')?.value) || 4 };
+    if (!pb) return;
+    pb.riskRules = {
+      maxInitialRisk:        parseFloat(document.getElementById('rr-maxrisk')?.value) || 1,
+      maxPyramid:            parseInt(document.getElementById('rr-maxpyr')?.value)    || 1,
+      portfolioHeatGuideline: parseFloat(document.getElementById('rr-heat')?.value)  || 5,
+    };
     await db.savePlaybook(pb);
     app.toast('Risk rules saved', 'success');
   }
@@ -266,18 +270,16 @@ const playbookModule = (() => {
     const item = input?.value.trim();
     if (!item) return;
     const pb = await db.getPlaybookById(pbId);
-    const vi = pb.versions.findIndex(v => v.version === pb.currentVersion);
-    if (vi < 0) return;
-    pb.versions[vi].checklist = [...(pb.versions[vi].checklist || []), item];
+    if (!pb) return;
+    pb.checklist = [...(pb.checklist || []), item];
     await db.savePlaybook(pb);
     document.querySelector('.detail-tab-btn[data-dtab="checklist"]')?.click();
   }
 
   async function _deleteChecklist(pbId, idx) {
     const pb = await db.getPlaybookById(pbId);
-    const vi = pb.versions.findIndex(v => v.version === pb.currentVersion);
-    if (vi < 0) return;
-    pb.versions[vi].checklist.splice(idx, 1);
+    if (!pb) return;
+    pb.checklist = (pb.checklist || []).filter((_, i) => i !== idx);
     await db.savePlaybook(pb);
     document.querySelector('.detail-tab-btn[data-dtab="checklist"]')?.click();
   }
