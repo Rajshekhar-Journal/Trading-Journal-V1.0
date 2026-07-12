@@ -213,15 +213,20 @@ const calc = (() => {
   }
 
   // ── Portfolio Heat ─────────────────────────────────────────────────────
-  // Portfolio heat = sum of OPEN risk R for all positions (always positive)
-  function getPortfolioHeat(openTrades, currentR) {
+  // Portfolio Heat % = Total Open Risk in ₹ / Account Equity × 100
+  // This gives the true capital-at-risk percentage regardless of individual RPT sizes.
+  function getPortfolioHeat(openTrades, equity) {
+    if (!openTrades || openTrades.length === 0 || !equity) return 0;
+    const totalRiskRs = getPortfolioHeatRs(openTrades);
+    return (totalRiskRs / equity) * 100;  // returns a %
+  }
+
+  // Returns total open risk in absolute ₹ (sum of |currentRisk| across all positions)
+  function getPortfolioHeatRs(openTrades) {
     if (!openTrades || openTrades.length === 0) return 0;
     return openTrades.reduce((sum, trade) => {
       const m = getTradeMetrics(trade);
-      // Only count positions that are still at risk (below stop for Long, above stop for Short)
-      // currentRisk is already signed (negative = at loss); take absolute value
-      const riskR = m.initialRPT > 0 ? Math.abs(m.currentRisk) / m.initialRPT : 0;
-      return sum + riskR;
+      return sum + Math.max(0, Math.abs(m.currentRisk));
     }, 0);
   }
 
@@ -548,7 +553,7 @@ const calc = (() => {
 
   return {
     getTradeMetrics, getUnrealizedPnl,
-    getPortfolioHeat,
+    getPortfolioHeat, getPortfolioHeatRs,
     getCurrentEquity, getNetDeposits, getCurrentR, getAvailableCash,
     getWinRate, getAvgWinLoss, getExpectancy, getMaxDrawdown,
     getTotalPnl, getTotalR,

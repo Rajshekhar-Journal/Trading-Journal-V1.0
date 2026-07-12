@@ -76,10 +76,12 @@ const dashboardModule = (() => {
     if (!container) return;
 
     const rm              = settings?.riskManagement || {};
-    const maxHeat         = Number(rm.maxPortfolioHeat || 4);
-    const warnHeat        = Number(rm.warningPortfolioHeat || 3.5);
-    const portfolioHeat   = calc.getPortfolioHeat(openTrades, currentR);
-    const remaining       = Math.max(0, maxHeat - portfolioHeat);
+    const maxHeat         = Number(rm.maxPortfolioHeat  || 5);    // now in %
+    const warnHeat        = Number(rm.warningPortfolioHeat || 3); // now in %
+    const portfolioHeat   = calc.getPortfolioHeat(openTrades, equity);   // returns %
+    const heatRs          = calc.getPortfolioHeatRs(openTrades);          // absolute ₹
+    const remaining       = Math.max(0, maxHeat - portfolioHeat);         // remaining %
+    const remainingRs     = (remaining / 100) * equity;                   // remaining ₹
 
     // Equity change vs net deposits
     const netDeposits = calc.getNetDeposits(capital);
@@ -95,18 +97,11 @@ const dashboardModule = (() => {
     else if (portfolioHeat < maxHeat) { heatColor = '#f59e0b'; heatLabel = 'Warning'; heatBadge = 'badge-warning'; }
     else                              { heatColor = '#ef4444'; heatLabel = 'Max Hit'; heatBadge = 'badge-danger';  }
 
-    // Remaining capacity colour
-    let remColor = '#22c55e';
-    if (remaining <= 0)   remColor = '#ef4444';
-    else if (remaining <= 0.5) remColor = '#f59e0b';
-
+    // Remaining capacity hint
     let remHint;
-    if (remaining <= 0)        remHint = '🚫 No new positions allowed';
-    else if (remaining <= 0.5) remHint = '⚠ Very limited capacity';
-    else {
-      const slots = Math.floor(remaining);
-      remHint = slots > 0 ? `Room for ~${slots} more position${slots !== 1 ? 's' : ''}` : 'Less than 1R remaining';
-    }
+    if (remaining <= 0)         remHint = '🚫 No new positions — heat at max';
+    else if (remaining <= 0.5)  remHint = '⚠ Very limited capacity remaining';
+    else                        remHint = `~${calc.formatCurrency(remainingRs)} more can be risked`;
 
     // Market health
     const trendEmoji   = marketHealth.trend === 'Uptrend' ? '🟢' : '🔴';
@@ -129,24 +124,25 @@ const dashboardModule = (() => {
       <div class="stat-card">
         <div class="stat-card-label">Portfolio Heat</div>
         <div class="stat-card-value" style="display:flex;align-items:baseline;gap:6px;">
-          <span>${portfolioHeat.toFixed(2)}R</span>
-          <span class="text-muted" style="font-size:14px;">/ ${maxHeat}R</span>
+          <span>${portfolioHeat.toFixed(2)}%</span>
+          <span class="text-muted" style="font-size:14px;">/ ${maxHeat}%</span>
           <span class="badge ${heatBadge}" style="font-size:10px;">${heatLabel}</span>
         </div>
-        <div style="margin-top:8px;">
+        <div style="margin-top:4px;font-size:11px;color:#64748b;">${calc.formatCurrency(heatRs)} at risk across ${openTrades.length} position${openTrades.length !== 1 ? 's' : ''}</div>
+        <div style="margin-top:6px;">
           <div style="height:6px;border-radius:3px;background:#e2e8f0;overflow:hidden;">
             <div style="height:100%;width:${heatPct}%;background:${heatColor};border-radius:3px;transition:width 0.4s ease;"></div>
           </div>
           <div style="display:flex;justify-content:space-between;margin-top:4px;">
-            <span style="font-size:10px;color:#94a3b8;">${openTrades.length} open position${openTrades.length !== 1 ? 's' : ''}</span>
-            <span style="font-size:10px;color:#94a3b8;">Warn ${warnHeat}R / Max ${maxHeat}R</span>
+            <span style="font-size:10px;color:#94a3b8;">Warn ${warnHeat}% / Max ${maxHeat}%</span>
+            <span style="font-size:10px;color:#94a3b8;">${heatPct.toFixed(0)}% of limit used</span>
           </div>
         </div>
       </div>
 
       <div class="stat-card">
         <div class="stat-card-label">Remaining Capacity</div>
-        <div class="stat-card-value" style="color:${remColor};">${remaining.toFixed(2)}R</div>
+        <div class="stat-card-value" style="color:${remaining <= 0 ? '#ef4444' : remaining <= 0.5 ? '#f59e0b' : '#22c55e'}">${remaining.toFixed(2)}%</div>
         <div class="stat-card-sub text-muted" style="margin-top:4px;">${remHint}</div>
       </div>
 

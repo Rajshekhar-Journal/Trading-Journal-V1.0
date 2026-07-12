@@ -28,8 +28,10 @@ const positionsModule = (() => {
     const realizedPnl = calc.getTotalPnl(closedTrades);
     const equity      = calc.getCurrentEquity(capital, realizedPnl);
     const currentR    = calc.getCurrentR(equity, settings);
-    const heat        = calc.getPortfolioHeat(openTrades, currentR);
-    const maxHeat     = settings?.riskManagement?.maxPortfolioHeat || 4;
+    const heat        = calc.getPortfolioHeat(openTrades, equity);   // returns %
+    const heatRs      = calc.getPortfolioHeatRs(openTrades);          // absolute ₹
+    const maxHeat     = Number(settings?.riskManagement?.maxPortfolioHeat  || 5);  // %
+    const warnHeat    = Number(settings?.riskManagement?.warningPortfolioHeat || 3); // %
     const totalExposure = openTrades.reduce((s, t) => s + calc.getTradeMetrics(t).exposure, 0);
     const unrealizedPnl = openTrades.reduce((s, t) => {
       const m = calc.getTradeMetrics(t);
@@ -37,11 +39,12 @@ const positionsModule = (() => {
       return s + calc.getUnrealizedPnl(t, cmp);
     }, 0);
 
+    const heatCls = heat >= maxHeat ? 'negative' : heat >= warnHeat ? 'warning' : 'positive';
     const cards = [
-      { label: 'Open Positions',  value: openTrades.length,              sub: 'Currently active',                      icon: '📊' },
-      { label: 'Total Exposure',  value: calc.formatCurrency(totalExposure), sub: `${openTrades.length > 0 ? ((totalExposure/equity)*100).toFixed(1) : 0}% of equity`, icon: '💼' },
-      { label: 'Portfolio Heat',  value: `${heat.toFixed(2)}R / ${maxHeat}R`, sub: `Warn: ${settings?.riskManagement?.warningPortfolioHeat||3.5}R`, icon: '🌡️', cls: heat >= maxHeat ? 'negative' : heat >= (settings?.riskManagement?.warningPortfolioHeat||3.5) ? 'warning' : 'positive' },
-      { label: 'Unrealized P&L',  value: calc.formatCurrency(unrealizedPnl), sub: 'Based on CMP',                    icon: '📈', cls: unrealizedPnl >= 0 ? 'positive' : 'negative' },
+      { label: 'Open Positions',  value: openTrades.length,                    sub: 'Currently active',                                              icon: '📊' },
+      { label: 'Total Exposure',  value: calc.formatCurrency(totalExposure),   sub: `${equity > 0 ? ((totalExposure/equity)*100).toFixed(1) : 0}% of equity`, icon: '💼' },
+      { label: 'Portfolio Heat',  value: `${heat.toFixed(2)}% / ${maxHeat}%`, sub: `${calc.formatCurrency(heatRs)} at risk • Warn: ${warnHeat}%`,  icon: '🌡️', cls: heatCls },
+      { label: 'Unrealized P&L',  value: calc.formatCurrency(unrealizedPnl),  sub: 'Based on CMP',                                                  icon: '📈', cls: unrealizedPnl >= 0 ? 'positive' : 'negative' },
     ];
 
     const el = document.getElementById('pos-overview-cards');
@@ -565,9 +568,10 @@ const positionsModule = (() => {
     const realPnl  = calc.getTotalPnl(closedT);
     const equity   = calc.getCurrentEquity(capital, realPnl);
     const currentR = calc.getCurrentR(equity, settings);
-    const maxHeat  = settings?.riskManagement?.maxPortfolioHeat || 4;
-    const openTrades = await db.getOpenTrades();
-    const currentHeat = calc.getPortfolioHeat(openTrades, currentR);
+    const maxHeat   = Number(settings?.riskManagement?.maxPortfolioHeat || 5);   // %
+    const warnHeat  = Number(settings?.riskManagement?.warningPortfolioHeat || 3); // %
+    const openTrades  = await db.getOpenTrades();
+    const currentHeat = calc.getPortfolioHeat(openTrades, equity);  // returns %
 
     const content = `<div class="form-grid">
       <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="pyr-date" value="${today}"></div>
@@ -587,18 +591,17 @@ const positionsModule = (() => {
         const notes   = document.getElementById('pyr-notes').value;
         if (!date || !price || !qty) { app.toast('Please fill all fields', 'error'); return; }
 
-        // Portfolio heat validation
-        const m = calc.getTradeMetrics(trade);
-        const newRisk   = Math.abs((price - m.currentStop) * qty);
-        const newRiskR  = currentR > 0 ? newRisk / currentR : 0;
-        const projHeat  = currentHeat + newRiskR;
+        // Portfolio heat validation (%)
+        const m         = calc.getTradeMetrics(trade);
+        const newRisk   = Math.abs((price - m.currentStop) * qty);       // ₹ risk of this pyramid
+        const projHeat  = equity > 0 ? ((calc.getPortfolioHeatRs(openTrades) + newRisk) / equity * 100) : 0;
         const warnEl    = document.getElementById('pyr-heat-warn');
 
-        if (projHeat > maxHeat + 0.5) {
-          if (warnEl) warnEl.innerHTML = `<div class="alert-banner danger">⚠ High Risk: Projected heat ${projHeat.toFixed(2)}R exceeds max ${maxHeat}R by ${(projHeat-maxHeat).toFixed(2)}R. Are you sure?</div>`;
-          if (!confirm(`Portfolio heat will reach ${projHeat.toFixed(2)}R (max: ${maxHeat}R). Proceed?`)) return;
+        if (projHeat > maxHeat + 1) {
+          if (warnEl) warnEl.innerHTML = `<div class="alert-banner danger">⚠ High Risk: Projected heat ${projHeat.toFixed(2)}% exceeds max ${maxHeat}% by ${(projHeat-maxHeat).toFixed(2)}%. Are you sure?</div>`;
+          if (!confirm(`Portfolio heat will reach ${projHeat.toFixed(2)}% (max: ${maxHeat}%). Proceed?`)) return;
         } else if (projHeat > maxHeat) {
-          if (!confirm(`Portfolio heat will reach ${projHeat.toFixed(2)}R which slightly exceeds max ${maxHeat}R. Proceed?`)) return;
+          if (!confirm(`Portfolio heat will reach ${projHeat.toFixed(2)}% which slightly exceeds max ${maxHeat}%. Proceed?`)) return;
         }
 
         const updated = { ...trade, pyramids: [...(trade.pyramids||[]), { id: db.generateId('py'), date, price, qty, charges, actionSource: 'Pyramid', notes }] };

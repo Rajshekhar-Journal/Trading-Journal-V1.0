@@ -177,9 +177,13 @@ const settingsModule = (() => {
     return `<div class="settings-page">
       <div class="settings-section-header">Risk Management</div>
       <div class="form-grid cols-3">
-        <div class="form-group"><label class="form-label">Max Portfolio Heat (R)</label><input class="form-input" type="number" id="rm-maxheat" step="0.5" value="${s.maxPortfolioHeat || 4}"></div>
-        <div class="form-group"><label class="form-label">Warning Heat (R)</label><input class="form-input" type="number" id="rm-warnheat" step="0.5" value="${s.warningPortfolioHeat || 3.5}"></div>
+        <div class="form-group"><label class="form-label">Max Portfolio Heat (%)</label><input class="form-input" type="number" id="rm-maxheat" step="0.1" min="0.1" max="20" value="${s.maxPortfolioHeat || 5}"></div>
+        <div class="form-group"><label class="form-label">Warning Heat (%)</label><input class="form-input" type="number" id="rm-warnheat" step="0.1" min="0.1" max="20" value="${s.warningPortfolioHeat || 3}"></div>
         <div class="form-group"><label class="form-label">Max RPT (₹)</label><input class="form-input" type="number" id="rm-maxrpt" value="${s.maxRPT || 15000}"></div>
+      </div>
+      <div style="font-size:11px;color:#64748b;margin-top:-8px;margin-bottom:12px;">
+        💡 <strong>Portfolio Heat %</strong> = Total ₹ at risk if all stops hit ÷ Account Equity &times; 100.
+        Example: 5% means if every stop hits today, you lose 5% of your account.
       </div>
       <div class="form-section-title">Risk Mode</div>
       <div class="risk-radio-group">
@@ -206,7 +210,14 @@ const settingsModule = (() => {
   async function _saveRisk() {
     const settings = await db.getSettings();
     const mode = document.querySelector('input[name="rm-mode"]:checked')?.value || 'Dynamic';
-    settings.riskManagement = { ...settings.riskManagement, maxPortfolioHeat: parseFloat(document.getElementById('rm-maxheat')?.value) || 4, warningPortfolioHeat: parseFloat(document.getElementById('rm-warnheat')?.value) || 3.5, maxRPT: parseFloat(document.getElementById('rm-maxrpt')?.value) || 15000, riskMode: mode, riskPercent: parseFloat(document.getElementById('rm-riskpct')?.value) || 1, fixedRiskAmount: parseFloat(document.getElementById('rm-fixedamt')?.value) || 5000 };
+    settings.riskManagement = { ...settings.riskManagement,
+      maxPortfolioHeat:     parseFloat(document.getElementById('rm-maxheat')?.value)  || 5,
+      warningPortfolioHeat: parseFloat(document.getElementById('rm-warnheat')?.value) || 3,
+      maxRPT:               parseFloat(document.getElementById('rm-maxrpt')?.value)   || 15000,
+      riskMode: mode,
+      riskPercent:     parseFloat(document.getElementById('rm-riskpct')?.value)  || 1,
+      fixedRiskAmount: parseFloat(document.getElementById('rm-fixedamt')?.value) || 5000
+    };
     await db.saveSettings(settings);
     _hasUnsaved = false;
     app.toast('Risk settings saved', 'success');
