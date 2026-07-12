@@ -220,8 +220,14 @@ const positionsModule = (() => {
     // Restore fullscreen button state if we are currently in fullscreen
     if (_isFullscreen) {
       const fsBtn = document.getElementById('pos-fs-btn');
+      const tablePanel = document.getElementById('pos-table-panel');
+      const splitView  = document.getElementById('pos-split-view');
+      // Re-apply fullscreen styles (panel HTML was just rebuilt)
+      tablePanel?.classList.add('hidden');
+      panel.setAttribute('style', 'flex:1;min-width:0;');
+      if (splitView) splitView.style.height = 'calc(100vh - 200px)';
       if (fsBtn) {
-        fsBtn.textContent = '⊡';
+        fsBtn.textContent = '\u229F'; // ⊟
         fsBtn.title = 'Minimize — return to split view';
       }
     }

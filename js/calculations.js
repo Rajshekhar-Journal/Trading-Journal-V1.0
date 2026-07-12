@@ -48,8 +48,16 @@ const calc = (() => {
         ? Number(trade.stopRevisions[trade.stopRevisions.length - 1].newStop)
         : Number(trade.initialStop || 0));
 
-    // RPT (never decreases once set; grows if current risk exceeds it)
-    const initialRPT = Number(trade.rpt || trade.initialRPT || db.getSettings().tradingDefaults?.defaultRPT || 10000);
+    // RPT — use stored trade.rpt if explicitly set, otherwise derive from initial entry
+    // Never call async db.getSettings() here — this is a pure sync function
+    const firstEntry     = entries[0];
+    const initialStop    = Number(trade.initialStop || 0);
+    const computedRPT    = firstEntry
+      ? Math.abs(Number(firstEntry.price) - initialStop) * Number(firstEntry.qty || 0)
+      : 0;
+    // Only use trade.rpt if it's a valid non-zero number that isn't the old fallback default
+    const storedRPT = Number(trade.rpt || 0);
+    const initialRPT = storedRPT > 0 ? storedRPT : (computedRPT > 0 ? computedRPT : 10000);
 
     // Current Exposure
     const exposure = avgEntryPrice * openQty;
