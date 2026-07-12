@@ -123,19 +123,17 @@ const dashboardModule = (() => {
 
       <div class="stat-card">
         <div class="stat-card-label">Portfolio Heat</div>
-        <div class="stat-card-value" style="display:flex;align-items:baseline;gap:6px;">
-          <span>${portfolioHeat.toFixed(2)}%</span>
-          <span class="text-muted" style="font-size:14px;">/ ${maxHeat}%</span>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:2px;">
+          <span class="stat-card-value" style="margin:0;">${portfolioHeat.toFixed(2)}%</span>
           <span class="badge ${heatBadge}" style="font-size:10px;">${heatLabel}</span>
         </div>
-        <div style="margin-top:4px;font-size:11px;color:#64748b;">${calc.formatCurrency(heatRs)} at risk across ${openTrades.length} position${openTrades.length !== 1 ? 's' : ''}</div>
-        <div style="margin-top:6px;">
+        <div style="margin-top:3px;font-size:11px;color:#64748b;">${calc.formatCurrency(heatRs)} at risk</div>
+        <div style="margin-top:8px;">
           <div style="height:6px;border-radius:3px;background:#e2e8f0;overflow:hidden;">
             <div style="height:100%;width:${heatPct}%;background:${heatColor};border-radius:3px;transition:width 0.4s ease;"></div>
           </div>
-          <div style="display:flex;justify-content:space-between;margin-top:4px;">
-            <span style="font-size:10px;color:#94a3b8;">Warn ${warnHeat}% / Max ${maxHeat}%</span>
-            <span style="font-size:10px;color:#94a3b8;">${heatPct.toFixed(0)}% of limit used</span>
+          <div style="margin-top:5px;font-size:10px;color:#94a3b8;">
+            Max Risk Allowed : ${maxHeat}% (<strong style="color:#64748b;">${calc.formatCurrency((maxHeat / 100) * equity)}</strong>)
           </div>
         </div>
       </div>
