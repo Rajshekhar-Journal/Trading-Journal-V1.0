@@ -48,16 +48,10 @@ const calc = (() => {
         ? Number(trade.stopRevisions[trade.stopRevisions.length - 1].newStop)
         : Number(trade.initialStop || 0));
 
-    // RPT — use stored trade.rpt if explicitly set, otherwise derive from initial entry
-    // Never call async db.getSettings() here — this is a pure sync function
-    const firstEntry     = entries[0];
-    const initialStop    = Number(trade.initialStop || 0);
-    const computedRPT    = firstEntry
-      ? Math.abs(Number(firstEntry.price) - initialStop) * Number(firstEntry.qty || 0)
-      : 0;
-    // Only use trade.rpt if it's a valid non-zero number that isn't the old fallback default
-    const storedRPT = Number(trade.rpt || 0);
-    const initialRPT = storedRPT > 0 ? storedRPT : (computedRPT > 0 ? computedRPT : 10000);
+    // RPT — dynamic high-water mark: replay entire lifecycle, track max risk ever.
+    // MAX(Initial Risk, risk after each pyramid, risk after each stop revision)
+    // RPT never decreases.
+    const initialRPT = computeRPT(trade) || 10000;
 
     // Current Exposure
     const exposure = avgEntryPrice * openQty;
@@ -66,7 +60,7 @@ const calc = (() => {
     const maxExposureEver = Number(trade.positionSizeMax || exposure);
     const positionSize = Math.max(maxExposureEver, exposure);
 
-    // Current Position Risk
+    // Current Position Risk (signed: negative = loss if stop is hit)
     let currentRisk = 0;
     if (openQty > 0 && currentStop > 0) {
       if (trade.direction === 'Long') {
@@ -76,8 +70,8 @@ const calc = (() => {
       }
     }
 
-    // Current Position Risk in R
-    const rptToUse = Math.max(initialRPT, trade.rptCurrent || initialRPT);
+    // Open Risk R = Current Position Risk / RPT
+    const rptToUse = initialRPT;
     const currentRiskR = rptToUse !== 0 ? currentRisk / rptToUse : 0;
 
     // Net Realized P&L
@@ -139,6 +133,73 @@ const calc = (() => {
       realizedPnl: 0, profitR: 0, profitPct: 0,
       holdingDays: 0, tradingDays: 0, isOpen: false
     };
+  }
+
+  // ── RPT Lifecycle Computation ─────────────────────────────────────────────────
+  // Replays the full trade lifecycle chronologically:
+  //   Entry → Pyramids → Stop Revisions → Partial Exits
+  // At every event it recomputes position risk and keeps the MAX (high-water mark).
+  // RPT = MAX(Initial Risk, risk after each pyramid, risk after each stop revision)
+  // RPT NEVER decreases.
+  function computeRPT(trade) {
+    const entries      = trade.entries      || [];
+    const pyramids     = trade.pyramids     || [];
+    const partialExits = trade.partialExits || [];
+    const stopRevisions= trade.stopRevisions|| [];
+    const direction    = trade.direction    || 'Long';
+
+    if (!entries.length) return 0;
+
+    // Build a single chronological event list
+    const events = [];
+    entries.forEach(e => events.push({
+      date: e.date || '', type: 'buy',
+      price: Number(e.price || 0), qty: Number(e.qty || 0)
+    }));
+    pyramids.forEach(p => events.push({
+      date: p.date || '', type: 'buy',
+      price: Number(p.price || 0), qty: Number(p.qty || 0)
+    }));
+    partialExits.forEach(p => events.push({
+      date: p.date || '', type: 'sell', qty: Number(p.qty || 0)
+    }));
+    stopRevisions.forEach(s => {
+      if (s.newStop) events.push({
+        date: s.date || '', type: 'stop', newStop: Number(s.newStop)
+      });
+    });
+
+    // Sort chronologically (YYYY-MM-DD strings sort correctly lexicographically)
+    events.sort((a, b) => a.date.localeCompare(b.date));
+
+    let totalCost   = 0;
+    let totalQty    = 0;
+    let curStop     = Number(trade.initialStop || 0);
+    let maxRPT      = 0;
+
+    for (const ev of events) {
+      if (ev.type === 'buy') {
+        totalCost += ev.price * ev.qty;
+        totalQty  += ev.qty;
+      } else if (ev.type === 'sell') {
+        const avgE = totalQty > 0 ? totalCost / totalQty : 0;
+        totalQty   = Math.max(0, totalQty - ev.qty);
+        totalCost  = totalQty * avgE;        // keep same avg entry
+      } else if (ev.type === 'stop') {
+        curStop = ev.newStop;
+      }
+
+      if (totalQty > 0 && curStop > 0) {
+        const avgE   = totalCost / totalQty;
+        // Absolute position risk at this moment in the lifecycle
+        const posRisk = direction === 'Long'
+          ? Math.max(0, (avgE - curStop) * totalQty)
+          : Math.max(0, (curStop - avgE) * totalQty);
+        maxRPT = Math.max(maxRPT, posRisk);
+      }
+    }
+
+    return maxRPT;
   }
 
   // ── Unrealized P&L ─────────────────────────────────────────────────────────
@@ -497,6 +558,7 @@ const calc = (() => {
     getZerodhaCharges,
     isBreakEven, getTradeResult,
     formatCurrency, formatR, formatDate, formatNumber,
-    getHoldingDays, getTradingDays, getCAGR
+    getHoldingDays, getTradingDays, getCAGR,
+    computeRPT
   };
 })();
