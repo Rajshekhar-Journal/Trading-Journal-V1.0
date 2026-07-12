@@ -334,7 +334,25 @@ const db = (() => {
   // ════════════════════════════════════════════════════════════════════════
   function isSeeded()  { return true; } // Always true in cloud mode
   function markSeeded() {}
-  function clearAll()  {} // Use Settings → Reset in UI
+  function clearAll()  {} // legacy no-op
+
+  // ── Full account data reset (used by Settings → Reset All Data) ───────────
+  // Deletes every row owned by the current user from all Supabase tables.
+  async function resetAllData() {
+    const uid = _uid();
+    if (!uid) throw new Error('Not authenticated');
+    const sb = _sb();
+    const tables = ['trades', 'capital', 'playbooks', 'settings', 'equity_snapshots', 'market_health'];
+    const errors = [];
+    for (const table of tables) {
+      const { error } = await sb.from(table).delete().eq('user_id', uid);
+      if (error) {
+        console.warn(`resetAllData: could not clear ${table}:`, error.message);
+        errors.push(table);
+      }
+    }
+    return errors; // empty array = full success
+  }
 
   // ── Default Settings ──────────────────────────────────────────────────────
   function getDefaultSettings() {
@@ -396,6 +414,6 @@ const db = (() => {
     // Equity Snapshots
     getEquitySnapshots, saveEquitySnapshot,
     // Compatibility
-    isSeeded, markSeeded, clearAll, on, off, generateId,
+    isSeeded, markSeeded, clearAll, resetAllData, on, off, generateId,
   };
 })();

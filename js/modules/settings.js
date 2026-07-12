@@ -601,17 +601,32 @@ const settingsModule = (() => {
       </div>`;
     app.openModal('⚠️ Reset All Data', content, [
       { id: 'cancel', label: 'Cancel', class: 'btn-secondary', onClick: app.closeModal },
-      { id: 'confirm-reset', label: '🗑 Delete Everything', class: 'btn-danger', onClick: () => {
+      { id: 'confirm-reset', label: '🗑 Delete Everything', class: 'btn-danger', onClick: async () => {
         const val = document.getElementById('reset-confirm-input')?.value?.trim();
         if (val !== 'RESET') {
           app.toast('Please type RESET exactly to confirm', 'error');
           return;
         }
-        // Clear all data keys but keep tj_seeded=true so demo data does NOT re-appear
-        ['tj_trades', 'tj_playbooks', 'tj_capital', 'tj_settings', 'tj_markethealth', 'tj_last_backup'].forEach(k => localStorage.removeItem(k));
-        localStorage.setItem('tj_seeded', 'true'); // prevent demo re-seed
+        // Disable button to prevent double-click
+        const btn = document.getElementById('confirm-reset');
+        if (btn) { btn.disabled = true; btn.textContent = 'Deleting…'; }
+
+        try {
+          // Delete all Supabase data for this user (trades, capital, playbooks, settings, snapshots)
+          const failedTables = await db.resetAllData();
+          if (failedTables.length > 0) {
+            app.toast(`Reset partially failed for: ${failedTables.join(', ')}. Please try again.`, 'error');
+            if (btn) { btn.disabled = false; btn.textContent = '🗑 Delete Everything'; }
+            return;
+          }
+        } catch (e) {
+          app.toast('Reset failed: ' + e.message, 'error');
+          if (btn) { btn.disabled = false; btn.textContent = '🗑 Delete Everything'; }
+          return;
+        }
+
         app.closeModal();
-        app.toast('All data cleared. Reloading fresh journal...', 'warning');
+        app.toast('All data deleted. Reloading fresh journal...', 'warning');
         setTimeout(() => location.reload(), 1500);
       }}
     ]);
