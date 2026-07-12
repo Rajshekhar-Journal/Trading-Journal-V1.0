@@ -6,7 +6,7 @@
 const calc = (() => {
 
   // ── Trade Metrics (SSOT) ───────────────────────────────────────────────────
-  function getTradeMetrics(trade) {
+  function getTradeMetrics(trade, settings = null) {
     if (!trade || !trade.entries || trade.entries.length === 0) return _emptyMetrics();
 
     const entries = trade.entries || [];
@@ -93,9 +93,15 @@ const calc = (() => {
     const profitPct = positionSize > 0 ? (realizedPnl / positionSize) * 100 : 0;
 
     // Holding Days
-    const entryDate = entries.length > 0 ? new Date(entries[0].date) : new Date();
-    const exitDate = finalExit ? new Date(finalExit.date) : new Date();
+    const entryDateStr = entries.length > 0 ? entries[0].date : new Date().toISOString().split('T')[0];
+    const exitDateStr = finalExit ? finalExit.date : new Date().toISOString().split('T')[0];
+    const entryDate = new Date(entryDateStr);
+    const exitDate = new Date(exitDateStr);
     const holdingDays = Math.ceil((exitDate - entryDate) / (1000 * 60 * 60 * 24));
+    
+    // Trading Days
+    const holidays = settings ? settings.marketHolidays : '';
+    const tradingDays = getTradingDays(entryDateStr, exitDateStr, holidays);
 
     return {
       entryQty, pyramidQty, totalBuyQty,
@@ -107,7 +113,7 @@ const calc = (() => {
       exposure, positionSize,
       currentRisk, currentRiskR,
       realizedPnl, profitR, profitPct,
-      holdingDays,
+      holdingDays, tradingDays,
       isOpen: openQty > 0
     };
   }
@@ -123,7 +129,7 @@ const calc = (() => {
       exposure: 0, positionSize: 0,
       currentRisk: 0, currentRiskR: 0,
       realizedPnl: 0, profitR: 0, profitPct: 0,
-      holdingDays: 0, isOpen: false
+      holdingDays: 0, tradingDays: 0, isOpen: false
     };
   }
 

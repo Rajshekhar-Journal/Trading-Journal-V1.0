@@ -155,7 +155,7 @@ const positionsModule = (() => {
               ${dirBadge}
               <span class="badge badge-muted">${trade.tradeType}</span>
             </div>
-            <div class="detail-sub">${m.holdingDays} days held · Entry: ${calc.formatDate(trade.entries?.[0]?.date)} · Playbook: ${playbook?.name || '—'}</div>
+            <div class="detail-sub">${m.holdingDays} days held (trading days: ${m.tradingDays}) · Entry: ${calc.formatDate(trade.entries?.[0]?.date)} · Playbook: ${playbook?.name || '—'}</div>
           </div>
           <div style="display:flex;gap:6px;align-items:center;" id="pos-panel-btns">
             <button class="btn btn-secondary btn-sm" id="pos-fs-btn"

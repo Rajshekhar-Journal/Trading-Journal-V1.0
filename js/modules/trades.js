@@ -167,7 +167,7 @@ const tradesModule = (() => {
         <td class="font-mono">₹${calc.formatNumber(m.avgEntryPrice)}</td>
         <td>${calc.formatDate(trade.finalExit?.date||'')}</td>
         <td class="font-mono">₹${calc.formatNumber(m.avgExitPrice)}</td>
-        <td>${m.holdingDays}d</td>
+        <td>${m.holdingDays}d (T: ${m.tradingDays})</td>
         <td class="text-muted">${pb?.name||'—'}</td>
         <td><span class="badge badge-muted" style="font-size:10px">${trade.tradeType||'Equity'}</span></td>
         <td><span class="badge ${trade.direction==='Long'?'badge-success':'badge-danger'}" style="font-size:10px">${trade.direction?.[0]||'L'}</span></td>
@@ -217,7 +217,7 @@ const tradesModule = (() => {
               <span class="badge badge-muted">${trade.direction}</span>
               <span class="badge badge-muted">${trade.tradeType||'Equity'}</span>
             </div>
-            <div class="detail-sub">${calc.formatDate(trade.entries?.[0]?.date)} → ${calc.formatDate(trade.finalExit?.date)} · ${m.holdingDays} days</div>
+            <div class="detail-sub">${calc.formatDate(trade.entries?.[0]?.date)} → ${calc.formatDate(trade.finalExit?.date)} · ${m.holdingDays} days (trading days: ${m.tradingDays})</div>
           </div>
           <div style="display:flex;gap:6px;align-items:center;">
             <button class="btn btn-secondary btn-sm" onclick="tradesModule._toggleFullscreen()" title="Toggle fullscreen">⛶</button>

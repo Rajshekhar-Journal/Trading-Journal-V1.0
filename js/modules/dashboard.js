@@ -334,7 +334,7 @@ const dashboardModule = (() => {
           </td>
           <td class="text-right">${calc.formatCurrency(m.exposure)}</td>
           <td class="text-right ${rClass}">${calc.formatR(m.currentRiskR)}</td>
-          <td class="text-right"><span class="badge ${dayBadge}">${m.holdingDays}d</span></td>
+          <td class="text-right"><span class="badge ${dayBadge}">${m.holdingDays}d (T: ${m.tradingDays})</span></td>
         </tr>
       `;
     }).join('');
