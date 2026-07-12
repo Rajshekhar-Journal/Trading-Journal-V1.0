@@ -94,8 +94,7 @@ const positionsModule = (() => {
       const pnlCls    = unrealPnl >= 0 ? 'text-success' : 'text-danger';
       const riskRCls  = m.currentRiskR <= -1.5 ? 'text-danger' : m.currentRiskR <= -0.5 ? 'text-warning' : 'text-success';
       const chgCls    = chgPct >= 0 ? 'text-success' : 'text-danger';
-      const netPnl    = unrealPnl + (m.realizedPnl || 0);   // total open position P&L (unreal + any realized from partials)
-      const netR      = m.initialRPT > 0 ? netPnl / m.initialRPT : 0;
+      const netPnl    = m.realizedPnl || 0;  // = (AvgSell - AvgEntry) × SellQty − Charges
       return `<tr data-id="${trade.id}" onclick="positionsModule._onRowClick('${trade.id}')">
         <td><strong>${trade.symbol}</strong> <span class="badge badge-muted" style="font-size:10px">${trade.direction}</span></td>
         <td><span class="badge badge-muted">${trade.tradeType}</span></td>
@@ -110,7 +109,7 @@ const positionsModule = (() => {
         <td class="${riskRCls} font-mono">${calc.formatR(m.currentRiskR)}</td>
         <td class="font-mono">${calc.formatCurrency(m.exposure)}</td>
         <td class="${pnlCls} font-mono fw-600">${calc.formatCurrency(unrealPnl)} <span style="font-size:11px">(${unrealR >= 0 ? '+' : ''}${unrealR.toFixed(2)}R)</span></td>
-        <td class="${netPnl >= 0 ? 'text-success' : netPnl < 0 ? 'text-danger' : 'text-muted'} font-mono">${calc.formatCurrency(netPnl)} <span style="font-size:10px;opacity:0.7">(${netR >= 0 ? '+' : ''}${netR.toFixed(2)}R)</span></td>
+        <td class="${netPnl >= 0 ? 'text-success' : netPnl < 0 ? 'text-danger' : 'text-muted'} font-mono">${calc.formatCurrency(netPnl)}</td>
         <td>${alertBadge}</td>
       </tr>`;
     }).join('');
