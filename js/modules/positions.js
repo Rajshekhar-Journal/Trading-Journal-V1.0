@@ -167,6 +167,7 @@ const positionsModule = (() => {
               title="Full Screen — hides position table">
               ⛶
             </button>
+            <button class="btn btn-danger btn-sm" onclick="positionsModule._deleteTrade('${tradeId}')" title="Delete Trade">Delete Trade</button>
             <button class="detail-close-btn" onclick="positionsModule._closePanel()" title="Close panel — return to position table">✕</button>
           </div>
         </div>
@@ -196,7 +197,6 @@ const positionsModule = (() => {
             <button class="quick-action-btn" onclick="positionsModule._showStopModal('${tradeId}')">Revise Stop</button>
             <button class="quick-action-btn" onclick="positionsModule._showNoteModal('${tradeId}')">Add Note</button>
             <button class="quick-action-btn" onclick="positionsModule._showCmpModal('${tradeId}')" style="background:#e0e7ff;color:#5b6af0">Update CMP</button>
-            <button class="quick-action-btn" onclick="positionsModule._deleteTrade('${tradeId}')" style="background:#fee2e2;color:#ef4444;border-color:#fca5a5;">Delete Trade</button>
           </div>
 
           <div class="detail-tab-bar">
