@@ -4,6 +4,7 @@
  */
 const playbookModule = (() => {
   let _selectedPbId = null;
+  let _cachedPb     = null;  // in-memory copy of the open playbook; mutated directly to avoid stale re-fetch
 
   async function init() {
     await _renderSummaryCards();
@@ -90,7 +91,8 @@ const playbookModule = (() => {
     panel.classList.remove('hidden');
     const pb = await db.getPlaybookById(pbId);
     if (!pb) return;
-    const ver = pb.versions?.find(v => v.version === pb.currentVersion) || pb.versions?.[0] || {};
+    _cachedPb = pb;  // prime the in-memory cache
+    const ver = pb;  // flat Supabase schema: pb IS the version
     const stBadge = pb.status === 'Active' ? 'badge-success' : pb.status === 'Draft' ? 'badge-info' : 'badge-muted';
 
     panel.innerHTML = `
@@ -130,18 +132,27 @@ const playbookModule = (() => {
         panel.querySelectorAll('.detail-tab-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         const tc = document.getElementById('pb-dtab-content');
-        // Re-fetch fresh data; in flat Supabase schema, pb IS the version
-        const p = await db.getPlaybookById(pbId);
-        if (!tc || !p) return;
+        if (!tc) return;
         const tab = btn.dataset.dtab;
-        if (tab === 'info')          tc.innerHTML = _tabInfo(p, p, pbId);
-        else if (tab === 'entry')    tc.innerHTML = _tabEntryRules(p, p, pbId);
-        else if (tab === 'exit')     tc.innerHTML = _tabExitRules(p, p, pbId);
-        else if (tab === 'risk')     tc.innerHTML = _tabRiskRules(p, p, pbId);
-        else if (tab === 'checklist') tc.innerHTML = _tabChecklist(p, p, pbId);
-        else if (tab === 'trades')   tc.innerHTML = await _tabLinkedTrades(p);
-        else if (tab === 'analytics') tc.innerHTML = await _tabAnalytics(p);
-        else if (tab === 'history')  tc.innerHTML = _tabVersionHistory(p);
+        // For tabs that need fresh server data, re-fetch and update cache
+        // For editing tabs, use _cachedPb to avoid stale-read race
+        if (tab === 'trades' || tab === 'analytics' || tab === 'history') {
+          const p = await db.getPlaybookById(pbId);
+          if (!p) return;
+          _cachedPb = p;
+          if (tab === 'trades')    tc.innerHTML = await _tabLinkedTrades(p);
+          else if (tab === 'analytics') tc.innerHTML = await _tabAnalytics(p);
+          else if (tab === 'history')   tc.innerHTML = _tabVersionHistory(p);
+        } else {
+          // Use cached copy — always up-to-date since mutations update it directly
+          const p = _cachedPb || await db.getPlaybookById(pbId);
+          if (!p) return;
+          if (tab === 'info')       tc.innerHTML = _tabInfo(p, p, pbId);
+          else if (tab === 'entry') tc.innerHTML = _tabEntryRules(p, p, pbId);
+          else if (tab === 'exit')  tc.innerHTML = _tabExitRules(p, p, pbId);
+          else if (tab === 'risk')  tc.innerHTML = _tabRiskRules(p, p, pbId);
+          else if (tab === 'checklist') tc.innerHTML = _tabChecklist(p, p, pbId);
+        }
       });
     });
   }
@@ -189,23 +200,21 @@ const playbookModule = (() => {
     const input = document.getElementById('pb-new-entry-rule');
     const rule = input?.value.trim();
     if (!rule) return;
-    const pb = await db.getPlaybookById(pbId);
-    if (!pb) return;
-    pb.entryRules = [...(pb.entryRules || []), rule];
-    await db.savePlaybook(pb);
+    // Use cached pb — never re-fetch; avoids Supabase stale-read race
+    if (!_cachedPb) return;
+    _cachedPb.entryRules = [...(_cachedPb.entryRules || []), rule];
+    await db.savePlaybook(_cachedPb);
     app.toast('Rule added', 'success');
-    // Re-render directly from updated pb — avoids Supabase read-after-write delay
     const tc = document.getElementById('pb-dtab-content');
-    if (tc) tc.innerHTML = _tabEntryRules(pb, pb, pbId);
+    if (tc) tc.innerHTML = _tabEntryRules(_cachedPb, _cachedPb, pbId);
   }
 
   async function _deleteEntryRule(pbId, idx) {
-    const pb = await db.getPlaybookById(pbId);
-    if (!pb) return;
-    pb.entryRules = (pb.entryRules || []).filter((_, i) => i !== idx);
-    await db.savePlaybook(pb);
+    if (!_cachedPb) return;
+    _cachedPb.entryRules = (_cachedPb.entryRules || []).filter((_, i) => i !== idx);
+    await db.savePlaybook(_cachedPb);
     const tc = document.getElementById('pb-dtab-content');
-    if (tc) tc.innerHTML = _tabEntryRules(pb, pb, pbId);
+    if (tc) tc.innerHTML = _tabEntryRules(_cachedPb, _cachedPb, pbId);
   }
 
   function _tabExitRules(pb, ver, pbId) {
@@ -227,14 +236,13 @@ const playbookModule = (() => {
   }
 
   async function _saveExitRules(pbId) {
-    const pb = await db.getPlaybookById(pbId);
-    if (!pb) return;
-    pb.exitRules = { ...(pb.exitRules || {}),
+    if (!_cachedPb) return;
+    _cachedPb.exitRules = { ...(_cachedPb.exitRules || {}),
       day5Rule:     document.getElementById('er-day5')?.checked,
       atrExtension: document.getElementById('er-atr')?.checked,
       ema20Exit:    document.getElementById('er-ema')?.checked,
     };
-    await db.savePlaybook(pb);
+    await db.savePlaybook(_cachedPb);
   }
 
   function _tabRiskRules(pb, ver, pbId) {
@@ -248,14 +256,13 @@ const playbookModule = (() => {
   }
 
   async function _saveRiskRules(pbId) {
-    const pb = await db.getPlaybookById(pbId);
-    if (!pb) return;
-    pb.riskRules = {
-      maxInitialRisk:        parseFloat(document.getElementById('rr-maxrisk')?.value) || 1,
-      maxPyramid:            parseInt(document.getElementById('rr-maxpyr')?.value)    || 1,
-      portfolioHeatGuideline: parseFloat(document.getElementById('rr-heat')?.value)  || 5,
+    if (!_cachedPb) return;
+    _cachedPb.riskRules = {
+      maxInitialRisk:         parseFloat(document.getElementById('rr-maxrisk')?.value) || 1,
+      maxPyramid:             parseInt(document.getElementById('rr-maxpyr')?.value)    || 1,
+      portfolioHeatGuideline: parseFloat(document.getElementById('rr-heat')?.value)   || 5,
     };
-    await db.savePlaybook(pb);
+    await db.savePlaybook(_cachedPb);
     app.toast('Risk rules saved', 'success');
   }
 
@@ -272,21 +279,20 @@ const playbookModule = (() => {
     const input = document.getElementById('pb-new-checklist');
     const item = input?.value.trim();
     if (!item) return;
-    const pb = await db.getPlaybookById(pbId);
-    if (!pb) return;
-    pb.checklist = [...(pb.checklist || []), item];
-    await db.savePlaybook(pb);
+    if (!_cachedPb) return;
+    _cachedPb.checklist = [...(_cachedPb.checklist || []), item];
+    await db.savePlaybook(_cachedPb);
+    app.toast('Checklist item added', 'success');
     const tc = document.getElementById('pb-dtab-content');
-    if (tc) tc.innerHTML = _tabChecklist(pb, pb, pbId);
+    if (tc) tc.innerHTML = _tabChecklist(_cachedPb, _cachedPb, pbId);
   }
 
   async function _deleteChecklist(pbId, idx) {
-    const pb = await db.getPlaybookById(pbId);
-    if (!pb) return;
-    pb.checklist = (pb.checklist || []).filter((_, i) => i !== idx);
-    await db.savePlaybook(pb);
+    if (!_cachedPb) return;
+    _cachedPb.checklist = (_cachedPb.checklist || []).filter((_, i) => i !== idx);
+    await db.savePlaybook(_cachedPb);
     const tc = document.getElementById('pb-dtab-content');
-    if (tc) tc.innerHTML = _tabChecklist(pb, pb, pbId);
+    if (tc) tc.innerHTML = _tabChecklist(_cachedPb, _cachedPb, pbId);
   }
 
   async function _tabLinkedTrades(pb) {
