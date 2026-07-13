@@ -221,6 +221,7 @@ const tradesModule = (() => {
           </div>
           <div style="display:flex;gap:6px;align-items:center;">
             <button class="btn btn-secondary btn-sm" onclick="tradesModule._toggleFullscreen()" title="Toggle fullscreen">⛶</button>
+            <button class="btn btn-danger btn-sm" onclick="tradesModule._deleteTrade('${tradeId}')" title="Delete Trade">Delete Trade</button>
             <button class="detail-close-btn" onclick="tradesModule._closePanel()">✕</button>
           </div>
         </div>
@@ -493,5 +494,13 @@ const tradesModule = (() => {
     _selectedId = null;
   }
 
-  return { init, _onRowClick, _closePanel, _toggleFullscreen, _addNote, _deleteLifecycleRow, _editLifecycleRow };
+  async function _deleteTrade(tradeId) {
+    if (!confirm('Are you sure you want to permanently delete this entire trade? This action cannot be undone.')) return;
+    await db.deleteTrade(tradeId);
+    app.toast('Trade deleted successfully', 'success');
+    _closePanel();
+    await init();
+  }
+
+  return { init, _onRowClick, _closePanel, _toggleFullscreen, _addNote, _deleteLifecycleRow, _editLifecycleRow, _deleteTrade };
 })();

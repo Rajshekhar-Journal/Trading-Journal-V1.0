@@ -196,6 +196,7 @@ const positionsModule = (() => {
             <button class="quick-action-btn" onclick="positionsModule._showStopModal('${tradeId}')">Revise Stop</button>
             <button class="quick-action-btn" onclick="positionsModule._showNoteModal('${tradeId}')">Add Note</button>
             <button class="quick-action-btn" onclick="positionsModule._showCmpModal('${tradeId}')" style="background:#e0e7ff;color:#5b6af0">Update CMP</button>
+            <button class="quick-action-btn" onclick="positionsModule._deleteTrade('${tradeId}')" style="background:#fee2e2;color:#ef4444;border-color:#fca5a5;">Delete Trade</button>
           </div>
 
           <div class="detail-tab-bar">
@@ -820,5 +821,13 @@ const positionsModule = (() => {
     }
   }
 
-  return { init, _onRowClick, _closePanel, _toggleFullscreen, _showExitModal, _showPyramidModal, _showStopModal, _showNoteModal, _showCmpModal, _autoCalcTrade, _autoCalcExitCharges, _autoCalcPyramidCharges, _editLifecycleRow, _deleteLifecycleRow };
+  async function _deleteTrade(tradeId) {
+    if (!confirm('Are you sure you want to permanently delete this entire trade? This action cannot be undone.')) return;
+    await db.deleteTrade(tradeId);
+    app.toast('Trade deleted successfully', 'success');
+    _closePanel();
+    await init();
+  }
+
+  return { init, _onRowClick, _closePanel, _toggleFullscreen, _showExitModal, _showPyramidModal, _showStopModal, _showNoteModal, _showCmpModal, _autoCalcTrade, _autoCalcExitCharges, _autoCalcPyramidCharges, _editLifecycleRow, _deleteLifecycleRow, _deleteTrade };
 })();
