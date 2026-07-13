@@ -194,7 +194,9 @@ const playbookModule = (() => {
     pb.entryRules = [...(pb.entryRules || []), rule];
     await db.savePlaybook(pb);
     app.toast('Rule added', 'success');
-    document.querySelector('.detail-tab-btn[data-dtab="entry"]')?.click();
+    // Re-render directly from updated pb — avoids Supabase read-after-write delay
+    const tc = document.getElementById('pb-dtab-content');
+    if (tc) tc.innerHTML = _tabEntryRules(pb, pb, pbId);
   }
 
   async function _deleteEntryRule(pbId, idx) {
@@ -202,7 +204,8 @@ const playbookModule = (() => {
     if (!pb) return;
     pb.entryRules = (pb.entryRules || []).filter((_, i) => i !== idx);
     await db.savePlaybook(pb);
-    document.querySelector('.detail-tab-btn[data-dtab="entry"]')?.click();
+    const tc = document.getElementById('pb-dtab-content');
+    if (tc) tc.innerHTML = _tabEntryRules(pb, pb, pbId);
   }
 
   function _tabExitRules(pb, ver, pbId) {
@@ -273,7 +276,8 @@ const playbookModule = (() => {
     if (!pb) return;
     pb.checklist = [...(pb.checklist || []), item];
     await db.savePlaybook(pb);
-    document.querySelector('.detail-tab-btn[data-dtab="checklist"]')?.click();
+    const tc = document.getElementById('pb-dtab-content');
+    if (tc) tc.innerHTML = _tabChecklist(pb, pb, pbId);
   }
 
   async function _deleteChecklist(pbId, idx) {
@@ -281,7 +285,8 @@ const playbookModule = (() => {
     if (!pb) return;
     pb.checklist = (pb.checklist || []).filter((_, i) => i !== idx);
     await db.savePlaybook(pb);
-    document.querySelector('.detail-tab-btn[data-dtab="checklist"]')?.click();
+    const tc = document.getElementById('pb-dtab-content');
+    if (tc) tc.innerHTML = _tabChecklist(pb, pb, pbId);
   }
 
   async function _tabLinkedTrades(pb) {
