@@ -134,25 +134,21 @@ const playbookModule = (() => {
         const tc = document.getElementById('pb-dtab-content');
         if (!tc) return;
         const tab = btn.dataset.dtab;
-        // For tabs that need fresh server data, re-fetch and update cache
-        // For editing tabs, use _cachedPb to avoid stale-read race
-        if (tab === 'trades' || tab === 'analytics' || tab === 'history') {
-          const p = await db.getPlaybookById(pbId);
-          if (!p) return;
-          _cachedPb = p;
-          if (tab === 'trades')    tc.innerHTML = await _tabLinkedTrades(p);
-          else if (tab === 'analytics') tc.innerHTML = await _tabAnalytics(p);
-          else if (tab === 'history')   tc.innerHTML = _tabVersionHistory(p);
-        } else {
-          // Use cached copy — always up-to-date since mutations update it directly
-          const p = _cachedPb || await db.getPlaybookById(pbId);
-          if (!p) return;
-          if (tab === 'info')       tc.innerHTML = _tabInfo(p, p, pbId);
-          else if (tab === 'entry') tc.innerHTML = _tabEntryRules(p, p, pbId);
-          else if (tab === 'exit')  tc.innerHTML = _tabExitRules(p, p, pbId);
-          else if (tab === 'risk')  tc.innerHTML = _tabRiskRules(p, p, pbId);
-          else if (tab === 'checklist') tc.innerHTML = _tabChecklist(p, p, pbId);
-        }
+        // ALWAYS use _cachedPb — it is the single source of truth.
+        // Mutations (_addEntryRule, _saveExitRules etc.) update _cachedPb in-place and then
+        // persist to Supabase. We must NEVER re-fetch here; a stale read would silently
+        // overwrite rules that were added but not yet fully replicated by Supabase.
+        const p = _cachedPb;
+        if (!p) return;
+        if (tab === 'info')           tc.innerHTML = _tabInfo(p, p, pbId);
+        else if (tab === 'entry')     tc.innerHTML = _tabEntryRules(p, p, pbId);
+        else if (tab === 'exit')      tc.innerHTML = _tabExitRules(p, p, pbId);
+        else if (tab === 'risk')      tc.innerHTML = _tabRiskRules(p, p, pbId);
+        else if (tab === 'checklist') tc.innerHTML = _tabChecklist(p, p, pbId);
+        // Trades/Analytics/History only fetch *trade* data internally — not the playbook object
+        else if (tab === 'trades')    tc.innerHTML = await _tabLinkedTrades(p);
+        else if (tab === 'analytics') tc.innerHTML = await _tabAnalytics(p);
+        else if (tab === 'history')   tc.innerHTML = _tabVersionHistory(p);
       });
     });
   }
@@ -175,16 +171,17 @@ const playbookModule = (() => {
   }
 
   async function _saveInfo(pbId) {
-    const pb = await db.getPlaybookById(pbId);
-    if (!pb) return;
-    // Flat Supabase schema — write directly to pb fields
-    pb.objective          = document.getElementById('pb-objective')?.value  || '';
-    pb.description        = document.getElementById('pb-desc')?.value       || '';
-    pb.marketType         = document.getElementById('pb-mkttype')?.value    || '';
-    pb.suitableTrend      = document.getElementById('pb-trend')?.value      || '';
-    pb.riskCategory       = document.getElementById('pb-riskcat')?.value    || '';
-    pb.idealHoldingPeriod = document.getElementById('pb-holding')?.value    || '';
-    await db.savePlaybook(pb);
+    // Mutate _cachedPb directly — DO NOT re-fetch from DB.
+    // A fresh db.getPlaybookById() here could return a stale snapshot that overwrites
+    // entry rules (or other mutations) that were saved but not yet replicated by Supabase.
+    if (!_cachedPb) return;
+    _cachedPb.objective          = document.getElementById('pb-objective')?.value  || '';
+    _cachedPb.description        = document.getElementById('pb-desc')?.value       || '';
+    _cachedPb.marketType         = document.getElementById('pb-mkttype')?.value    || '';
+    _cachedPb.suitableTrend      = document.getElementById('pb-trend')?.value      || '';
+    _cachedPb.riskCategory       = document.getElementById('pb-riskcat')?.value    || '';
+    _cachedPb.idealHoldingPeriod = document.getElementById('pb-holding')?.value    || '';
+    await db.savePlaybook(_cachedPb);
     app.toast('Playbook saved', 'success');
   }
 
