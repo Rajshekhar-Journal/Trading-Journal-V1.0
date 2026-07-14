@@ -635,7 +635,7 @@ const settingsModule = (() => {
   // ── PAGE: Formula Manager ──────────────────────────────────────────────────
   function _pageFormulas() {
     const FORMULAS = [
-      { name: 'Portfolio Heat', cat: 'Dashboard', expr: 'Σ (currentStop - avgEntry) × openQty / RPT', desc: 'Sum of current risk across all open positions, expressed in R units.', example: '3 positions each risking 0.6R → Heat = 1.8R' },
+      { name: 'Portfolio Heat', cat: 'Dashboard', expr: 'Σ (Open Risk ₹) / Account Equity × 100', desc: 'Total open risk across all positions as a percentage of total account equity.', example: '₹12,000 Risk / ₹400,000 Equity = 3%' },
       { name: 'Current Equity', cat: 'Capital', expr: 'Net Deposits + Realized P&L', desc: 'Total account value based on all deposits/withdrawals plus closed trade profits/losses.', example: 'Deposits ₹10L + P&L ₹1.2L = ₹11.2L' },
       { name: 'Current R (RPT)', cat: 'Capital', expr: 'IF Dynamic: Equity × RiskPct\nIF Fixed: fixedRiskAmount', desc: 'Risk Per Trade. The absolute rupee amount you are willing to lose on a single trade.', example: '₹10L × 1% = ₹10,000 RPT' },
       { name: 'Available Cash', cat: 'Capital', expr: 'Equity − Total Open Exposure', desc: 'Cash not currently deployed in any open position.', example: 'Equity ₹11L − Exposure ₹3L = ₹8L available' },

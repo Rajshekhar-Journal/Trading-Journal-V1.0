@@ -111,11 +111,11 @@ const capitalModule = (() => {
         </div>
         <div class="settings-row">
           <div class="settings-row-label">Max Portfolio Heat</div>
-          <div>${rm.maxPortfolioHeat||4}R</div>
+          <div>${rm.maxPortfolioHeat||5}%</div>
         </div>
         <div class="settings-row">
           <div class="settings-row-label">Warning Level</div>
-          <div>${rm.warningPortfolioHeat||3.5}R</div>
+          <div>${rm.warningPortfolioHeat||3}%</div>
         </div>
         <div style="margin-top:14px">
           <a href="#" onclick="app.navigate('settings');return false;" class="btn btn-secondary btn-sm">⚙ Edit Risk Config in Settings →</a>
