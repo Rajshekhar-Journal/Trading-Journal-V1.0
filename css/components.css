@@ -154,16 +154,37 @@
 .anl-section { margin-bottom: 22px; }
 .anl-section-title { font-size: 13px; font-weight: 600; color: var(--navy); margin-bottom: 12px; }
 
-/* ── Growth Simulator ──────────────────────── */
-.sim-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.sim-section { }
-.sim-section-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin-bottom: 12px; }
-.sim-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.sim-table th { padding: 8px 10px; background: var(--bg); font-weight: 600; font-size: 11px; text-transform: uppercase; color: var(--text-muted); }
-.sim-table td { padding: 8px 10px; border-bottom: 1px solid var(--border-light); }
-.sim-table tr:last-child td { border-bottom: none; }
-.sim-gap-pos { color: var(--success); font-weight: 600; }
-.sim-gap-neg { color: var(--danger); font-weight: 600; }
+/* ── Growth Simulator (Bucket-Based) ──────── */
+.sim-bucket-layout { display: flex; flex-direction: column; gap: 18px; }
+.sim-inputs-bar { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; padding: 14px 16px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.sim-inputs-bar .form-group { flex: 1; min-width: 130px; margin-bottom: 0; }
+.sim-bucket-tables { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+.sim-bucket-card { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+.sim-bucket-card.breakeven { border-top: 3px solid #94a3b8; }
+.sim-bucket-card.losing    { border-top: 3px solid var(--danger); }
+.sim-bucket-card.winning   { border-top: 3px solid var(--success); }
+.sim-bucket-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 12px; border-bottom: 1px solid var(--border); background: var(--bg); }
+.sim-bucket-card.breakeven .sim-bucket-title { color: #64748b; }
+.sim-bucket-card.losing    .sim-bucket-title { color: var(--danger); }
+.sim-bucket-card.winning   .sim-bucket-title { color: var(--success); }
+.sim-bucket-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.sim-bucket-table th { padding: 6px 8px; background: var(--bg); font-size: 10px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border-light); }
+.sim-bucket-table td { padding: 4px 6px; border-bottom: 1px solid var(--border-light); vertical-align: middle; }
+.sim-bucket-table tfoot td { padding: 6px 8px; border-bottom: none; }
+.sim-bucket-table .sim-trades-count { text-align: center; font-weight: 600; color: var(--navy); font-size: 12px; }
+.sim-cell-input { padding: 4px 6px !important; font-size: 12px !important; height: 28px !important; }
+.sim-bucket-total { padding: 6px 12px; font-size: 11px; font-weight: 600; color: var(--text-muted); background: var(--bg); border-top: 1px solid var(--border-light); }
+.sim-summary-section { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+.sim-summary-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.sim-summary-table td { padding: 9px 14px; border-bottom: 1px solid var(--border-light); }
+.sim-summary-table tr:last-child td { border-bottom: none; }
+.sim-summary-table td:first-child { color: var(--text-muted); }
+.sim-summary-table td:last-child { text-align: right; }
+.sim-val { font-weight: 700; font-size: 13px; }
+.sim-val.positive { color: var(--success); }
+.sim-val.negative { color: var(--danger); }
+.sim-section-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 10px 14px; background: var(--bg); border-bottom: 1px solid var(--border-light); color: var(--navy); }
+@media (max-width: 900px) { .sim-bucket-tables { grid-template-columns: 1fr; } }
 
 /* ── Capital Ledger ────────────────────────── */
 .txn-deposit { color: var(--success); }

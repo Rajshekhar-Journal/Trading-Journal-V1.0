@@ -392,75 +392,180 @@ const analyticsModule = (() => {
     </div>`;
   }
 
-  // ── TAB 6: Growth Simulator ────────────────────────────────────────────────
+  // ── TAB 6: Growth Simulator (Bucket-Based) ────────────────────────────────
   async function _tabSimulator(el, trades) {
-    const capital = await db.getCapital();
-    const closedTrades = await db.getClosedTrades();
-    const realizedPnl = calc.getTotalPnl(closedTrades);
-    const equity = calc.getCurrentEquity(capital, realizedPnl);
-    const settings = await db.getSettings();
-    const currentRPT = calc.getCurrentR(equity, settings);
-    const wr = calc.getWinRate(trades);
-    const { avgWinR, avgLossR } = calc.getAvgWinLoss(trades);
-    const exp = calc.getExpectancy(trades);
-    const tradesPerYear = trades.length > 0 ? Math.round(trades.length * (365 / Math.max(1, _daysDiff(trades)))) : 50;
-    const annualReturn = exp * currentRPT * tradesPerYear;
+    const capital   = await db.getCapital();
+    const allClosed = await db.getClosedTrades();
+    const equity    = calc.getCurrentEquity(capital, calc.getTotalPnl(allClosed));
+    const tpy       = trades.length > 0 ? Math.round(trades.length * (365 / Math.max(1, _daysDiff(trades)))) : 192;
 
-    el.innerHTML = `<div class="anl-tab-content">
-      <div class="sim-grid">
-        <div>
-          <div class="sim-section-title">📊 Current Performance (Actual)</div>
-          ${_simRow('Account Value', calc.formatCurrency(equity))}
-          ${_simRow('RPT (₹)', calc.formatCurrency(currentRPT))}
-          ${_simRow('Trades Analysed', trades.length)}
-          ${_simRow('Win Rate', `${wr.toFixed(1)}%`)}
-          ${_simRow('Avg Win (R)', avgWinR.toFixed(2))}
-          ${_simRow('Avg Loss (R)', avgLossR.toFixed(2))}
-          ${_simRow('Expectancy', calc.formatR(exp))}
-          ${_simRow('Est. Trades/Year', tradesPerYear)}
-          ${_simRow('Est. Annual Return', calc.formatCurrency(annualReturn))}
+    window._simBuckets = {
+      breakeven: [{ r: -0.10, pct: 15 }],
+      losing:    [{ r: -1.10, pct: 35 }, { r: -0.50, pct: 10 }],
+      winning:   [{ r: 1.0, pct: 12 }, { r: 2.0, pct: 10 }, { r: 3.0, pct: 8 }, { r: 5.0, pct: 6 }, { r: 7.0, pct: 3 }, { r: 10.0, pct: 1 }],
+    };
+
+    el.innerHTML = `<div class="anl-tab-content sim-bucket-layout">
+      <div class="sim-inputs-bar">
+        <div class="form-group"><label class="form-label">Account Value (₹)</label><input class="form-input" id="sim-capital" type="number" value="${equity.toFixed(0)}" oninput="analyticsModule._simRecalc()"></div>
+        <div class="form-group"><label class="form-label">Risk per Trade (%)</label><input class="form-input" id="sim-risk" type="number" step="0.1" value="1.20" oninput="analyticsModule._simRecalc()"></div>
+        <div class="form-group"><label class="form-label">Total Trades / Year</label><input class="form-input" id="sim-tpy" type="number" value="${tpy}" oninput="analyticsModule._simRecalc()"></div>
+        <button class="btn btn-secondary btn-sm" style="align-self:flex-end" onclick="analyticsModule._simAutoFill()">⚡ Auto-Fill from History</button>
+      </div>
+      <div class="sim-bucket-tables">
+        <div class="sim-bucket-card breakeven">
+          <div class="sim-bucket-title">Breakeven Buckets</div>
+          <table class="sim-bucket-table"><thead><tr><th>R Multiple</th><th>% of Total Trades</th><th>No. of Trades</th><th></th></tr></thead><tbody id="sim-be-body"></tbody>
+          <tfoot><tr><td colspan="4"><button class="btn btn-secondary btn-sm" onclick="analyticsModule._simAddRow('breakeven')">+ Add Row</button></td></tr></tfoot></table>
+          <div class="sim-bucket-total" id="sim-be-total"></div>
         </div>
-        <div>
-          <div class="sim-section-title">🎯 Target Performance</div>
-          <div class="form-group"><label class="form-label">Target Win Rate (%)</label><input class="form-input" id="sim-wr" type="number" step="1" value="${Math.round(wr)}" oninput="analyticsModule._simRecalc()"></div>
-          <div class="form-group"><label class="form-label">Target Avg Win (R)</label><input class="form-input" id="sim-win" type="number" step="0.1" value="${avgWinR.toFixed(1)}" oninput="analyticsModule._simRecalc()"></div>
-          <div class="form-group"><label class="form-label">Target Avg Loss (R)</label><input class="form-input" id="sim-loss" type="number" step="0.1" value="${avgLossR.toFixed(1)}" oninput="analyticsModule._simRecalc()"></div>
-          <div class="form-group"><label class="form-label">Trades Per Year</label><input class="form-input" id="sim-tpy" type="number" value="${tradesPerYear}" oninput="analyticsModule._simRecalc()"></div>
-          <div class="form-group"><label class="form-label">Starting Capital (₹)</label><input class="form-input" id="sim-capital" type="number" value="${equity.toFixed(0)}" oninput="analyticsModule._simRecalc()"></div>
-          <div class="form-group"><label class="form-label">Risk per trade (%)</label><input class="form-input" id="sim-risk" type="number" step="0.1" value="1" oninput="analyticsModule._simRecalc()"></div>
+        <div class="sim-bucket-card losing">
+          <div class="sim-bucket-title">Losing Buckets</div>
+          <table class="sim-bucket-table"><thead><tr><th>R Multiple</th><th>% of Total Trades</th><th>No. of Trades</th><th></th></tr></thead><tbody id="sim-loss-body"></tbody>
+          <tfoot><tr><td colspan="4"><button class="btn btn-secondary btn-sm" onclick="analyticsModule._simAddRow('losing')">+ Add Row</button></td></tr></tfoot></table>
+          <div class="sim-bucket-total" id="sim-loss-total"></div>
+        </div>
+        <div class="sim-bucket-card winning">
+          <div class="sim-bucket-title">Winning Buckets</div>
+          <table class="sim-bucket-table"><thead><tr><th>R Multiple</th><th>% of Total Trades</th><th>No. of Trades</th><th></th></tr></thead><tbody id="sim-win-body"></tbody>
+          <tfoot><tr><td colspan="4"><button class="btn btn-secondary btn-sm" onclick="analyticsModule._simAddRow('winning')">+ Add Row</button></td></tr></tfoot></table>
+          <div class="sim-bucket-total" id="sim-win-total"></div>
         </div>
       </div>
-      <div style="margin-top:18px" id="sim-results"></div>
+      <div id="sim-results"></div>
     </div>`;
+
+    _simRenderBuckets();
     _simRecalc();
   }
 
-  function _simRecalc() {
-    const wr = parseFloat(document.getElementById('sim-wr')?.value) / 100 || 0.4;
-    const avgWin = parseFloat(document.getElementById('sim-win')?.value) || 1.5;
-    const avgLoss = parseFloat(document.getElementById('sim-loss')?.value) || 1.0;
-    const tpy = parseInt(document.getElementById('sim-tpy')?.value) || 50;
-    const startCap = parseFloat(document.getElementById('sim-capital')?.value) || 1000000;
-    const riskPct = parseFloat(document.getElementById('sim-risk')?.value) / 100 || 0.01;
-    const exp = wr * avgWin - (1-wr) * avgLoss;
-    const years = [1,3,5,10,20];
-    const results = years.map(y => {
-      let cap = startCap;
-      for (let t = 0; t < tpy * y; t++) { const rpt = cap * riskPct; const r = Math.random() < wr ? avgWin : -avgLoss; cap += r * rpt; }
-      return { year: y, capital: cap };
+  function _simRenderBuckets() {
+    const tpy = parseInt(document.getElementById('sim-tpy')?.value) || 192;
+    const map = { breakeven: 'sim-be-body', losing: 'sim-loss-body', winning: 'sim-win-body' };
+    Object.entries(map).forEach(([type, bodyId]) => {
+      const tbody = document.getElementById(bodyId);
+      if (!tbody) return;
+      tbody.innerHTML = (window._simBuckets[type] || []).map((b, i) => `<tr>
+        <td><input class="form-input sim-cell-input" type="number" step="0.1" value="${b.r}" oninput="analyticsModule._simUpdateBucket('${type}',${i},'r',this.value)"></td>
+        <td><input class="form-input sim-cell-input" type="number" step="0.5" min="0" max="100" value="${b.pct}" oninput="analyticsModule._simUpdateBucket('${type}',${i},'pct',this.value)"></td>
+        <td class="sim-trades-count">${Math.round((b.pct / 100) * tpy)}</td>
+        <td><span class="rule-delete" onclick="analyticsModule._simDeleteRow('${type}',${i})">✕</span></td>
+      </tr>`).join('');
     });
-    const el = document.getElementById('sim-results');
-    if (!el) return;
-    el.innerHTML = `
-      <div class="form-section-title">Projection Engine — ${(exp*tpy*riskPct*100).toFixed(1)}% Est. Annual Return</div>
-      <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Expectancy: ${exp.toFixed(3)}R/trade · ${tpy} trades/year · ${(riskPct*100).toFixed(1)}% risk per trade</p>
-      <table class="sim-table"><thead><tr><th>Period</th><th>Projected Capital</th><th>CAGR</th></tr></thead>
-      <tbody>${results.map(r => { const cagr = (Math.pow(r.capital/startCap, 1/r.year)-1)*100; return `<tr>
-        <td>${r.year} Year${r.year > 1 ? 's' : ''}</td>
-        <td class="${r.capital > startCap ? 'sim-gap-pos' : 'sim-gap-neg'} font-mono fw-600">${calc.formatCurrency(r.capital)}</td>
-        <td class="${cagr >= 0 ? 'sim-gap-pos' : 'sim-gap-neg'}">${cagr.toFixed(1)}%/yr</td>
-      </tr>`; }).join('')}</tbody></table>
-      <div class="alert-banner info" style="margin-top:12px;font-size:11px">⚠ Projections are Monte Carlo simulations based on your target parameters. Past performance does not guarantee future results. Phase 2 will include AI-powered analysis.</div>`;
+  }
+
+  function _simUpdateBucket(type, idx, field, val) {
+    if (!window._simBuckets?.[type]) return;
+    window._simBuckets[type][idx][field] = parseFloat(val) || 0;
+    _simRenderBuckets();
+    _simRecalc();
+  }
+  function _simAddRow(type) {
+    if (!window._simBuckets) return;
+    const defs = { breakeven: { r: 0.0, pct: 5 }, losing: { r: -1.0, pct: 5 }, winning: { r: 1.0, pct: 5 } };
+    window._simBuckets[type].push({ ...defs[type] });
+    _simRenderBuckets();
+    _simRecalc();
+  }
+  function _simDeleteRow(type, idx) {
+    if (!window._simBuckets?.[type]) return;
+    window._simBuckets[type].splice(idx, 1);
+    _simRenderBuckets();
+    _simRecalc();
+  }
+
+  async function _simAutoFill() {
+    const allClosed = await db.getClosedTrades();
+    if (!allClosed.length) { app.toast('No closed trades to analyse', 'warning'); return; }
+    const rVals = allClosed.map(t => calc.getTradeMetrics(t).profitR).filter(r => isFinite(r));
+    if (!rVals.length) { app.toast('No valid R data', 'warning'); return; }
+    const BE_A   = [-0.10, 0.0];
+    const LOSS_A = [-10, -7, -5, -3, -2, -1.5, -1.0, -0.5];
+    const WIN_A  = [0.5, 1.0, 1.5, 2.0, 3.0, 5.0, 7.0, 10.0];
+    const ALL    = [...LOSS_A, ...BE_A, ...WIN_A];
+    const groups = {};
+    ALL.forEach(a => { groups[a] = []; });
+    rVals.forEach(r => {
+      let best = ALL[0], bestD = Infinity;
+      ALL.forEach(a => { const d = Math.abs(r - a); if (d < bestD) { bestD = d; best = a; } });
+      groups[best].push(r);
+    });
+    const total = rVals.length;
+    const toBuckets = anchors => anchors.filter(a => groups[a].length > 0).map(a => ({
+      r:   parseFloat((groups[a].reduce((s, v) => s + v, 0) / groups[a].length).toFixed(2)),
+      pct: parseFloat(((groups[a].length / total) * 100).toFixed(1)),
+    }));
+    window._simBuckets.breakeven = toBuckets(BE_A).length   ? toBuckets(BE_A)   : [{ r: -0.10, pct: 15 }];
+    window._simBuckets.losing    = toBuckets(LOSS_A).length ? toBuckets(LOSS_A) : [{ r: -1.10, pct: 35 }, { r: -0.50, pct: 10 }];
+    window._simBuckets.winning   = toBuckets(WIN_A).length  ? toBuckets(WIN_A)  : [{ r: 1.0, pct: 12 }];
+    _simRenderBuckets();
+    _simRecalc();
+    app.toast(`Auto-filled from ${total} closed trades`, 'success');
+  }
+
+  function _simRecalc() {
+    const startCap = parseFloat(document.getElementById('sim-capital')?.value) || 1500000;
+    const riskPct  = parseFloat(document.getElementById('sim-risk')?.value) / 100 || 0.012;
+    const tpy      = parseInt(document.getElementById('sim-tpy')?.value) || 192;
+    if (!window._simBuckets) return;
+    const { breakeven = [], losing = [], winning = [] } = window._simBuckets;
+    const sumPct = arr => arr.reduce((s, b) => s + b.pct, 0);
+    const bePct = sumPct(breakeven), lossPct = sumPct(losing), winPct = sumPct(winning);
+    const totalPct = bePct + lossPct + winPct;
+    [['sim-be-total', bePct], ['sim-loss-total', lossPct], ['sim-win-total', winPct]].forEach(([id, v]) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = `TOTAL  ${v.toFixed(1)}%`;
+    });
+    _simRenderBuckets();
+    const resultsEl = document.getElementById('sim-results');
+    if (!resultsEl) return;
+    if (Math.abs(totalPct - 100) > 0.5) {
+      resultsEl.innerHTML = `<div class="alert-banner danger" style="margin-top:14px">⚠ Bucket percentages must sum to 100%. Current total: <strong>${totalPct.toFixed(1)}%</strong></div>`;
+      return;
+    }
+    const wavg = (arr, tot) => tot > 0 ? arr.reduce((s, b) => s + b.r * b.pct, 0) / tot : 0;
+    const avgWinR  = wavg(winning,   winPct);
+    const avgLossR = Math.abs(wavg(losing, lossPct));
+    const avgBeR   = wavg(breakeven, bePct);
+    const avgWinPct  = avgWinR  * riskPct * 100;
+    const avgLossPct = avgLossR * riskPct * 100;
+    const avgBePct   = avgBeR   * riskPct * 100;
+    const arr        = avgLossR > 0 ? avgWinR / avgLossR : 0;
+    const allBuckets = [...winning, ...losing, ...breakeven];
+    const expectancyR   = allBuckets.reduce((s, b) => s + b.r * (b.pct / 100), 0);
+    const expectancyPct = allBuckets.reduce((s, b) => s + (b.r * riskPct * 100) * (b.pct / 100), 0);
+    const annualNoCmp   = expectancyPct * tpy;
+    const qGrowth       = Math.pow(1 + expectancyPct / 100, tpy / 4);
+    const annualCmp     = (Math.pow(qGrowth, 4) - 1) * 100;
+    const annualAmt     = startCap * annualCmp / 100;
+    const proj          = [5, 10, 20].map(y => ({ y, cap: startCap * Math.pow(qGrowth, y * 4) }));
+    const fc = v => calc.formatCurrency(v);
+    const fp = v => (v >= 0 ? '+' : '') + v.toFixed(2) + '%';
+    const fr = v => (v >= 0 ? '+' : '') + v.toFixed(2) + 'R';
+    const rc = v => v >= 0 ? 'style="background:#f0fdf4"' : 'style="background:#fef2f2"';
+    const vc = v => v >= 0 ? 'positive' : 'negative';
+    resultsEl.innerHTML = `
+      <div class="sim-summary-section">
+        <div class="sim-section-title" style="margin-bottom:12px">📊 Summary</div>
+        <table class="sim-summary-table"><tbody>
+          <tr><td>Win Rate</td><td class="sim-val positive">${winPct.toFixed(2)}%</td></tr>
+          <tr ${rc(1)}><td>Avg % Gained per Winning Trade</td><td class="sim-val positive">+${avgWinPct.toFixed(2)}%</td></tr>
+          <tr ${rc(-1)}><td>Avg % Lost per Losing Trade</td><td class="sim-val negative">-${avgLossPct.toFixed(2)}%</td></tr>
+          <tr><td>Average Gain : Loss (ARR)</td><td class="sim-val ${vc(arr - 1)}">${arr.toFixed(2)}</td></tr>
+          <tr ${rc(avgBePct)}><td>Avg % on Breakeven Trades</td><td class="sim-val ${vc(avgBePct)}">${fp(avgBePct)}</td></tr>
+          <tr ${rc(expectancyR)}><td>Expectancy per Trade (R)</td><td class="sim-val ${vc(expectancyR)}">${fr(expectancyR)}</td></tr>
+          <tr ${rc(expectancyPct)}><td>Expectancy per Trade (%)</td><td class="sim-val ${vc(expectancyPct)}">${fp(expectancyPct)}</td></tr>
+          <tr ${rc(annualNoCmp)}><td>Expected Return % (No Compounding)</td><td class="sim-val ${vc(annualNoCmp)}">${fp(annualNoCmp)}</td></tr>
+          <tr ${rc(annualCmp)}><td>Expected Return % (Quarterly Compounding)</td><td class="sim-val ${vc(annualCmp)}">${fp(annualCmp)}</td></tr>
+          <tr ${rc(annualAmt)}><td>Expected Return Year (Amount ₹)</td><td class="sim-val ${vc(annualAmt)}">${fc(annualAmt)}</td></tr>
+        </tbody></table>
+        <div style="margin-top:18px">
+          <div class="sim-section-title" style="margin-bottom:8px">📈 Long-Term Projections (Quarterly Compounding)</div>
+          <table class="sim-summary-table"><tbody>
+            ${proj.map(p => `<tr ${rc(p.cap - startCap)}><td>Account Value (${p.y} years)</td><td class="sim-val ${vc(p.cap - startCap)}">${fc(p.cap)}</td></tr>`).join('')}
+          </tbody></table>
+        </div>
+      </div>`;
   }
 
   function _daysDiff(trades) {
@@ -512,5 +617,5 @@ const analyticsModule = (() => {
     });
   }
 
-  return { init, _simRecalc, _switchCumChart };
+  return { init, _simRecalc, _simUpdateBucket, _simAddRow, _simDeleteRow, _simAutoFill, _switchCumChart };
 })();
